@@ -33,6 +33,17 @@ python -m scripts.ica_spike
 docker compose up -d worker beat
 ```
 
+## تلگرام — راه‌اندازی ربات
+
+```bash
+python -m scripts.setup_telegram
+python -m scripts.setup_telegram --send-test
+```
+
+1. ربات `@iNewsRobot` را در کانال خروجی **ادمین** کنید (با دسترسی Post Messages)
+2. کانال تست `@khabargozin_test` — ربات باید ادمین با دسترسی Post Messages باشد
+3. پس از ادمین شدن: `PUBLISH_MODE=test` یا `production` و `python -m scripts.retry_publish`
+
 ## PUBLISH_MODE
 
 | mode | رفتار |

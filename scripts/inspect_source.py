@@ -9,9 +9,11 @@ from app.config import get_settings
 from app.db.models.message import Message
 from app.db.models.source import Source
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     if len(sys.argv) < 2:
         print("Usage: python -m scripts.inspect_source <username>")
         return 1

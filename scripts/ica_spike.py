@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 import httpx
 
+from scripts._util import configure_stdout
+
 CHANNEL = "Tasnimnews"
 BASE = "https://tg.i-c-a.su/json"
 
@@ -31,6 +33,7 @@ def fetch_page(page: int, limit: int = 5, retries: int = 3) -> dict:
 
 
 def main() -> int:
+    configure_stdout()
     print("=== ICA API Spike ===\n")
 
     p1 = fetch_page(1, limit=5)

@@ -9,9 +9,11 @@ from app.ai.schemas import AIClusterOutput
 from app.db.models.ai_result import AIResult
 from app.publisher.formatter import format_publication_html
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     parser = argparse.ArgumentParser()
     parser.add_argument("--cluster-id", type=int, required=True)
     args = parser.parse_args()

@@ -12,9 +12,11 @@ from app.db.models.message import Message
 from app.db.models.publication_outbox import PublicationOutbox
 from app.db.models.source import Source
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, required=True)
     args = parser.parse_args()

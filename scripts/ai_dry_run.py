@@ -12,9 +12,11 @@ from app.db.models.message import Message
 from app.db.models.source import Source
 from app.db.session import get_session
 from app.tasks.ai import _build_messages_block
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     parser = argparse.ArgumentParser(description="AI dry run on real clusters")
     parser.add_argument("--limit", type=int, default=30)
     args = parser.parse_args()

@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.db.models.cluster import Cluster
 from app.db.models.publication import Publication
 from app.db.models.publication_outbox import PublicationOutbox
-from app.publisher.bot import resolve_chat_id, send_message_html
+from app.publisher.bot import get_cached_chat_id, resolve_and_cache_chat, send_message_html
 from app.publisher.formatter import format_publication_html
 from app.publisher.tracks import route_track
 from app.resilience.locking import outbox_lock
@@ -122,7 +122,10 @@ def process_outbox_item(session: Session, outbox_id: int) -> bool:
             needs_human_review=ai_row.needs_human_review,
         )
         rendered = format_publication_html(session, cluster.id, ai_result)
-        chat_id = resolve_chat_id(settings.PUBLISH_MODE)
+        mode = settings.PUBLISH_MODE
+        chat_id = get_cached_chat_id(mode)
+        if not chat_id:
+            chat_id = resolve_and_cache_chat(mode)
 
         try:
             post_id = send_message_html(chat_id, rendered)

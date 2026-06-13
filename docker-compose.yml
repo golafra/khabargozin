@@ -29,6 +29,9 @@ services:
     build: .
     command: celery -A app.tasks.celery_app worker -Q default,ml --loglevel=info --concurrency=2
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,6 +45,9 @@ services:
     build: .
     command: celery -A app.tasks.celery_app beat --loglevel=info
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - worker
     volumes:

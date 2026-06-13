@@ -7,7 +7,6 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
-from urllib.parse import urlparse
 
 import httpx
 
@@ -32,6 +31,24 @@ class ICAFetcher(FetcherBackend):
             time.sleep(min_interval - elapsed)
         self._last_request_at = time.monotonic()
 
+    def _get_page(self, url: str, retries: int = 3) -> dict:
+        last_response = None
+        for attempt in range(retries):
+            self._throttle()
+            last_response = self._client.get(url)
+            if last_response.status_code == 429:
+                wait = self._settings.TELEGRAM_FLOODWAIT_DEFAULT_SECONDS
+                match = re.search(r"FLOOD_WAIT_(\d+)", last_response.text)
+                if match:
+                    wait = float(match.group(1)) + 1
+                time.sleep(wait)
+                continue
+            last_response.raise_for_status()
+            return last_response.json()
+        if last_response is not None:
+            last_response.raise_for_status()
+        raise httpx.HTTPError(f"ICA request failed after {retries} retries: {url}")
+
     def fetch_messages(self, source: Source, cursor: FetchCursor) -> list[RawMessage]:
         collected: list[RawMessage] = []
         overlap_start = cursor.overlap_start
@@ -39,14 +56,11 @@ class ICAFetcher(FetcherBackend):
         reached_overlap = False
 
         while page <= self._settings.FETCH_MAX_PAGES:
-            self._throttle()
             url = (
                 f"{self.BASE_URL}/{source.username}"
                 f"?limit={self._settings.FETCH_PAGE_SIZE}&page={page}"
             )
-            response = self._client.get(url)
-            response.raise_for_status()
-            payload = response.json()
+            payload = self._get_page(url)
             messages = payload.get("messages") or []
             if not messages:
                 break

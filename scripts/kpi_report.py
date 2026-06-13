@@ -13,9 +13,11 @@ from app.db.models.cluster import Cluster
 from app.db.models.publication import Publication
 from app.db.models.source import Source
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", default="today")
     args = parser.parse_args()

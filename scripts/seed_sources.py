@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.db.models.source import Source
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 SOURCES = [
     # news_agency — primary producers
@@ -37,6 +38,7 @@ SOURCES = [
 
 
 def seed() -> int:
+    configure_stdout()
     session = get_session()
     try:
         for src in SOURCES:

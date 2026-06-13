@@ -5,9 +5,11 @@ import sys
 
 from app.db.models.cluster import Cluster
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, required=True)
     args = parser.parse_args()

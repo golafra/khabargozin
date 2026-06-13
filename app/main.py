@@ -9,12 +9,19 @@ from app.db.session import get_engine
 
 
 def healthcheck() -> int:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            try:
+                reconfigure(encoding="utf-8")
+            except Exception:
+                pass
     settings = get_settings()
     engine = get_engine()
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        print(f"khabargozin ok — publish_mode={settings.PUBLISH_MODE}")
+        print(f"khabargozin ok - publish_mode={settings.PUBLISH_MODE}")
         return 0
     except Exception as exc:
         print(f"healthcheck failed: {exc}", file=sys.stderr)

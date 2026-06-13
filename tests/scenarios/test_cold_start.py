@@ -8,7 +8,10 @@ from app.config import Settings
 
 
 def test_warmup_skips_clustering():
-    settings = Settings(APP_START_TIME=datetime.now(timezone.utc))
+    settings = Settings(
+        APP_START_TIME=datetime.now(timezone.utc),
+        COLD_START_WARMUP_MINUTES=20,
+    )
     with patch("app.clustering.threshold.get_settings", return_value=settings):
         session = MagicMock()
         skip, phase = should_skip_clustering(session)

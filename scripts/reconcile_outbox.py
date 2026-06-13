@@ -9,9 +9,11 @@ from sqlalchemy import select
 from app.db.models.publication import Publication
 from app.db.models.publication_outbox import PublicationOutbox
 from app.db.session import get_session
+from scripts._util import configure_stdout
 
 
 def main() -> int:
+    configure_stdout()
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", default=True)
     parser.add_argument("--apply", action="store_true")
