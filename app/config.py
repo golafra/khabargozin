@@ -1,0 +1,142 @@
+"""Application settings — all business thresholds live here, not in logic."""
+
+from datetime import datetime, timezone
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Connections
+    DATABASE_URL: str = "postgresql+psycopg2://khabargozin:khabargozin@localhost:5432/khabargozin"
+    REDIS_URL: str = "redis://localhost:6379/0"
+    OPENAI_API_KEY: str = ""
+    TELEGRAM_BOT_TOKEN: str = ""
+
+    # Publish
+    PUBLISH_MODE: Literal["dry_run", "test", "production"] = "dry_run"
+    TEST_OUTPUT_CHANNEL_ID: str = ""
+    PRODUCTION_OUTPUT_CHANNEL_ID: str = ""
+
+    # Cold start
+    COLD_START_WARMUP_MINUTES: int = 20
+    COLD_START_MIN_MESSAGES: int = 50
+    COLD_START_DYNAMIC_AFTER_HOURS: int = 24
+
+    # Threshold
+    CLUSTER_PERCENTILE: float = 75.0
+    MIN_CLUSTERS_FOR_PERCENTILE: int = 20
+    CLUSTER_SCORE_FALLBACK_THRESHOLD: float = 6.0
+    MIN_AI_SCORE_THRESHOLD: float = 5.5
+    MAX_AI_SCORE_THRESHOLD: float = 8.0
+    CLUSTER_ACTIVE_WINDOW_MINUTES: int = 360
+    CLUSTER_LOOKBACK_HOURS: int = 24
+
+    # Hold (phase 2)
+    HOLD_EXPIRE_MINUTES: int = 60
+    HOLD_MIN_SOURCES: int = 2
+    HOLD_CONFIDENCE_THRESHOLD: float = 0.70
+
+    # Fetcher
+    FETCH_SLIDING_WINDOW: int = 20
+    FETCH_TIME_OVERLAP_MINUTES: int = 60
+    FETCH_PAGE_SIZE: int = 50
+    FETCH_MAX_PAGES: int = 20
+    FETCH_PAGINATION_DELAY_SECONDS: float = 4.0
+    ICA_RATE_LIMIT_PER_MIN: int = 15
+    ICA_FETCH_DELAY_SECONDS: float = 4.0
+    SOURCE_STALE_ALERT_MINUTES: int = 120
+    FETCHER_BACKEND: Literal["ica", "mock"] = "ica"
+
+    # Merge
+    MERGE_OPEN_SIM: float = 0.72
+    MERGE_OPEN_SIM_NER: float = 0.65
+    MERGE_PUBLISHED_SIM: float = 0.85
+    MERGE_PUBLISHED_SIM_HIGH: float = 0.90
+    MERGE_PUBLISHED_NER: float = 0.50
+    MERGE_EVENT_SIG: float = 0.40
+    MERGE_NER_BOOST_THRESHOLD: float = 0.30
+    SUPPLEMENT_MAX_DELTA_MINUTES: int = 720
+
+    # Scorer
+    SCORER_WEIGHT_SOURCES: float = 0.35
+    SCORER_WEIGHT_CREDIBILITY: float = 0.30
+    SCORER_WEIGHT_SPEED: float = 0.20
+    SCORER_WEIGHT_URGENCY: float = 0.15
+    SCORER_WEIGHT_TOPIC: float = 0.0
+    SCORER_SOURCE_CAP: int = 4
+    REPUBLISH_SIM_THRESHOLD: float = 0.95
+    SCORER_SPEED_CAP_MINUTES: int = 60
+    SCORER_URGENCY_KEYWORD_CAP: int = 3
+
+    # AI
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MAX_TOKENS: int = 800
+    OPENAI_MONTHLY_BUDGET_USD: float = 15.0
+    AI_JSON_MAX_RETRIES: int = 2
+    PROMPT_VERSION: str = "v1"
+    AI_SCHEMA_VERSION: str = "v1"
+    FAST_MIN_CONFIDENCE: float = 0.75
+    BATCH_MIN_CONFIDENCE: float = 0.60
+    REJECT_CONFIDENCE: float = 0.40
+    SENSITIVE_MIN_CONFIDENCE: float = 0.75
+    RETRACTION_MIN_CONFIDENCE: float = 0.70
+
+    # Batch publish
+    BATCH_PUBLISH_INTERVAL_MINUTES: int = 15
+    BATCH_PUBLISH_INTERVAL_BUSY_MINUTES: int = 5
+    BATCH_QUEUE_BUSY_THRESHOLD: int = 5
+
+    # Telegram
+    TELEGRAM_PUBLISH_MIN_INTERVAL_SECONDS: float = 1.0
+    TELEGRAM_PUBLISH_MAX_RETRIES: int = 3
+    TELEGRAM_FLOODWAIT_DEFAULT_SECONDS: float = 5.0
+    TELEGRAM_PARSE_MODE: str = "HTML"
+
+    # Media
+    MEDIA_MIN_ASPECT_RATIO: float = 0.5
+    MEDIA_MAX_ASPECT_RATIO: float = 2.0
+    MEDIA_MAX_VIDEO_SECONDS: int = 60
+
+    # Outbox
+    OUTBOX_LOCK_TIMEOUT_MINUTES: int = 5
+
+    # Archiving (phase 2)
+    ARCHIVE_AFTER_DAYS: int = 35
+
+    # Celery beat
+    BEAT_FETCH_INTERVAL_SECONDS: int = 300
+    BEAT_CLUSTER_INTERVAL_SECONDS: int = 300
+    BEAT_AI_INTERVAL_SECONDS: int = 120
+    BEAT_BATCH_PUBLISH_INTERVAL_SECONDS: int = 300
+    BEAT_SOURCE_HEALTH_INTERVAL_SECONDS: int = 600
+    BEAT_HOLD_CHECK_INTERVAL_SECONDS: int = 300
+    TASK_LOCK_TTL_FETCH_SECONDS: int = 300
+    TASK_LOCK_TTL_CLUSTER_SECONDS: int = 300
+    TASK_LOCK_TTL_AI_SECONDS: int = 120
+    TASK_LOCK_TTL_PUBLISH_SECONDS: int = 60
+    CELERY_MAX_TASKS_PER_CHILD: int = 100
+
+    # Audit
+    DECISION_VERSION: str = "merge_v1"
+
+    # App
+    APP_START_TIME: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    EMBEDDING_DIM: int = 384
+
+    @property
+    def ica_min_interval_seconds(self) -> float:
+        return 60.0 / max(self.ICA_RATE_LIMIT_PER_MIN, 1)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "khabargozin"
+version = "0.1.0"
+description = "خبرگزین — سامانه جمع‌آوری، خوشه‌بندی و انتشار خبر از کانال‌های تلگرام"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "SQLAlchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "alembic>=1.13",
+    "celery[redis]>=5.3",
+    "redis>=5.0",
+    "httpx>=0.26",
+    "openai>=1.12",
+    "python-telegram-bot>=21.0",
+    "sentence-transformers>=2.3",
+    "pgvector>=0.2.5",
+    "numpy>=1.26",
+    "python-dateutil>=2.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "freezegun>=1.4",
+    "fakeredis>=2.20",
+]
+ner = ["hazm>=0.7"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

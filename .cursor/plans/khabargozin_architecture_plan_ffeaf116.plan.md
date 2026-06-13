@@ -4,34 +4,34 @@ overview: "طرح پیاده‌سازی از صفر سامانه خبرگزین:
 todos:
   - id: sprint-0-ica-poc
     content: "اسپرینت 0: Spike ICA API — pagination، rate-limit، edit_date، media_meta (قبل از A)"
-    status: pending
+    status: completed
   - id: sprint-a-scaffold
     content: "اسپرینت A: scaffold + FetcherBackend abstraction + DB + seed + ICA fetcher"
-    status: pending
+    status: completed
   - id: sprint-b-clustering
     content: "اسپرینت B: MiniLM+pgvector, lineage, merge open, scorer (audit double-count)"
-    status: pending
+    status: completed
   - id: sprint-b5-ai-dry-run
     content: "اسپرینت B.5: scripts/ai_dry_run.py — تست prompt روی خوشه‌های واقعی قبل از C"
-    status: pending
+    status: completed
   - id: sprint-c-ai
     content: "اسپرینت C: AI (json_schema+json_object fallback, circuit breaker, parser retry)"
-    status: pending
+    status: completed
   - id: sprint-d-publish
     content: "اسپرینت D: outbox publish, HTML formatter, Fast/Batch adaptive, FloodWait, CLI debug"
-    status: pending
+    status: completed
   - id: sprint-e-resilience
     content: "فاز ۲ — E: Redis buffer, archiving, source_stale alert, media filter"
-    status: pending
+    status: completed
   - id: sprint-f-hold
     content: "فاز ۲ — F: Hold/Verify + AI re-run rules + locked_for_hold"
-    status: pending
+    status: completed
   - id: sprint-g-retraction
     content: "فاز ۲ — G: retraction FSM + supplemental + delta check"
-    status: pending
+    status: completed
   - id: sprint-h-kpi
     content: "فاز ۲ — H: KPI + token cost report + test matrix کامل"
-    status: pending
+    status: completed
 isProject: false
 ---
 
