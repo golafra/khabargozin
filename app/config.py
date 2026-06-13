@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # Connections
     DATABASE_URL: str = "postgresql+psycopg2://khabargozin:khabargozin@localhost:5432/khabargozin"
     REDIS_URL: str = "redis://localhost:6379/0"
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
     OPENAI_API_KEY: str = ""
     TELEGRAM_BOT_TOKEN: str = ""
 
@@ -79,6 +81,7 @@ class Settings(BaseSettings):
 
     # AI
     OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_TIMEOUT_SECONDS: float = 30.0
     OPENAI_MAX_TOKENS: int = 800
     OPENAI_MONTHLY_BUDGET_USD: float = 15.0
     AI_JSON_MAX_RETRIES: int = 2

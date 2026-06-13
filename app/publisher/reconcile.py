@@ -22,12 +22,16 @@ def _hash_text(text: str) -> str:
 
 
 async def _fetch_recent_channel_messages(chat_id: str, limit: int = 50) -> list[dict]:
+    """Read recent posts from the OUTPUT channel (test/production), not source channels.
+
+    Source news is fetched via ICA (FetcherBackend). This helper is only used by
+    reconcile_unknown_outbox to match stuck outbox rows against what the bot posted.
+    """
     from telegram import Bot
 
     settings = get_settings()
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    # Bot API: only messages after bot joined — use get_chat_history workaround via forward
-    # For channels where bot is admin, we scan recent updates
+    # Bot API limitation: get_updates only sees channel_post updates for the output channel.
     messages = []
     try:
         updates = await bot.get_updates(limit=100)

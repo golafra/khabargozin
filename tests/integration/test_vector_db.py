@@ -3,48 +3,32 @@
 import pytest
 from sqlalchemy import text
 
-from tests.integration.conftest import TEST_DB_URL, requires_db
+from tests.integration.conftest import requires_db
 
 pytestmark = requires_db
 
 
-@pytest.fixture
-def db_session():
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    engine = create_engine(TEST_DB_URL)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    try:
-        yield session
-    finally:
-        session.rollback()
-        session.close()
-        engine.dispose()
-
-
-def test_pgvector_cosine_search(db_session):
-    db_session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    db_session.execute(text("""
+def test_pgvector_cosine_search(raw_db_session):
+    raw_db_session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    raw_db_session.execute(text("""
         CREATE TEMP TABLE tmp_vec_clusters (
             id serial PRIMARY KEY,
             centroid_embedding vector(3)
         ) ON COMMIT DROP
     """))
-    db_session.execute(
+    raw_db_session.execute(
         text("INSERT INTO tmp_vec_clusters (centroid_embedding) VALUES (CAST(:v AS vector))"),
         {"v": "[1,0,0]"},
     )
-    db_session.execute(
+    raw_db_session.execute(
         text("INSERT INTO tmp_vec_clusters (centroid_embedding) VALUES (CAST(:v AS vector))"),
         {"v": "[0.9,0.1,0]"},
     )
-    db_session.execute(
+    raw_db_session.execute(
         text("INSERT INTO tmp_vec_clusters (centroid_embedding) VALUES (CAST(:v AS vector))"),
         {"v": "[0,1,0]"},
     )
-    rows = db_session.execute(
+    rows = raw_db_session.execute(
         text("""
             SELECT id, 1 - (centroid_embedding <=> CAST(:q AS vector)) AS sim
             FROM tmp_vec_clusters
@@ -64,7 +48,6 @@ def test_find_similar_clusters_integration(db_session):
     from app.clustering.vector_search import find_similar_clusters
     from app.db.models.cluster import Cluster
 
-    db_session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     c1 = Cluster(
         status="scored",
         centroid_embedding=[1.0, 0.0, 0.0] + [0.0] * 381,

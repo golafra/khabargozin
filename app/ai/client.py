@@ -75,7 +75,14 @@ class AIClient:
         settings = get_settings()
         self._settings = settings
         self._session = session
-        self._client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+        self._client = (
+            OpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=settings.OPENAI_TIMEOUT_SECONDS,
+            )
+            if settings.OPENAI_API_KEY
+            else None
+        )
 
     def _chat(self, system: str, user: str, *, use_schema: bool = True) -> tuple[str, int, int]:
         if not self._client:

@@ -29,6 +29,7 @@ def enqueue_initial(
     track: str,
 ) -> PublicationOutbox | None:
     settings = get_settings()
+    session.flush()  # see pending rows before idempotency check
     existing = session.scalar(
         select(PublicationOutbox).where(
             PublicationOutbox.cluster_id == cluster.id,
