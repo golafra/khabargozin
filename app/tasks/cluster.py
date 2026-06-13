@@ -22,7 +22,7 @@ from app.publisher.retraction import detect_retraction_candidates, process_retra
 from app.publisher.supplemental import process_supplemental
 from app.resilience.locking import mark_slow_op
 from app.resilience.task_lock import acquire_redis_lock, release_redis_lock
-from app.tasks.celery_app import app
+from app.tasks.celery_app import celery_app
 
 
 def _process_message(session: Session, message: Message) -> None:
@@ -52,7 +52,7 @@ def _process_message(session: Session, message: Message) -> None:
     score_cluster(session, message.cluster_id)
 
 
-@app.task(name="app.tasks.cluster.cluster_pending_messages", acks_late=True)
+@celery_app.task(name="app.tasks.cluster.cluster_pending_messages", acks_late=True)
 def cluster_pending_messages() -> dict:
     settings = get_settings()
     lock_key = "task:cluster_pending_messages"

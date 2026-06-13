@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.tasks.celery_app import celery_app
 
 
 def archive_old_data(session: Session) -> dict[str, int]:
@@ -30,3 +31,16 @@ def archive_old_data(session: Session) -> dict[str, int]:
         pass
 
     return counts
+
+
+@celery_app.task(name="app.tasks.archive.archive_old_records", acks_late=True)
+def archive_old_records() -> dict:
+    from app.db.session import get_session
+
+    session = get_session()
+    try:
+        counts = archive_old_data(session)
+        session.commit()
+        return counts
+    finally:
+        session.close()

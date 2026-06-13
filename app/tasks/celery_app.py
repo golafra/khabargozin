@@ -7,8 +7,8 @@ from app.config import get_settings
 
 settings = get_settings()
 
-app = Celery("khabargozin", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
-app.conf.update(
+celery_app = Celery("khabargozin", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
+celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
@@ -54,9 +54,17 @@ def build_schedule_from_settings(s: "Settings") -> dict:
     }
 
 
-app.conf.beat_schedule = build_schedule_from_settings(settings)
+celery_app.conf.beat_schedule = build_schedule_from_settings(settings)
 
-app.autodiscover_tasks(["app.tasks"])
+# Explicit imports — autodiscover only loads app.tasks.__init__ (no tasks.py).
+import app.tasks.ai  # noqa: F401
+import app.tasks.archive  # noqa: F401
+import app.tasks.cluster  # noqa: F401
+import app.tasks.fetch  # noqa: F401
+import app.tasks.publish  # noqa: F401
+
+# Celery CLI (-A app.tasks.celery_app) expects an `app` attribute.
+app = celery_app
 
 
 @worker_process_init.connect

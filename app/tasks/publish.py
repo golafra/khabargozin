@@ -10,10 +10,10 @@ from app.publisher.hold import check_hold_confirmations
 from app.publisher.outbox import cleanup_stuck_outbox, process_outbox_item
 from app.publisher.tracks import batch_interval_minutes
 from app.resilience.task_lock import acquire_redis_lock, release_redis_lock
-from app.tasks.celery_app import app
+from app.tasks.celery_app import celery_app
 
 
-@app.task(name="app.tasks.publish.publish_batch_queue", acks_late=False)
+@celery_app.task(name="app.tasks.publish.publish_batch_queue", acks_late=False)
 def publish_batch_queue() -> dict:
     settings = get_settings()
     lock_key = "task:publish_batch_queue"
@@ -66,7 +66,7 @@ def publish_batch_queue() -> dict:
         release_redis_lock(lock_key)
 
 
-@app.task(name="app.tasks.publish.check_hold_confirmations", acks_late=True)
+@celery_app.task(name="app.tasks.publish.check_hold_confirmations", acks_late=True)
 def check_hold_confirmations_task() -> dict:
     from app.db.session import get_session
 
@@ -79,7 +79,7 @@ def check_hold_confirmations_task() -> dict:
         session.close()
 
 
-@app.task(name="app.tasks.publish.publish_fast_item", acks_late=False)
+@celery_app.task(name="app.tasks.publish.publish_fast_item", acks_late=False)
 def publish_fast_item(outbox_id: int) -> dict:
     from app.db.session import get_session
 

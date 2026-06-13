@@ -17,7 +17,7 @@ from app.fetcher.factory import get_fetcher
 from app.resilience.idempotency import content_hash
 from app.resilience.redis_buffer import buffer_message, flush_buffer
 from app.resilience.task_lock import acquire_redis_lock, release_redis_lock
-from app.tasks.celery_app import app
+from app.tasks.celery_app import celery_app
 
 
 def _overlap_start(source: Source, now: datetime) -> datetime:
@@ -90,7 +90,7 @@ def _fetch_source(session: Session, source: Source, fetcher) -> int:
     return inserted
 
 
-@app.task(name="app.tasks.fetch.fetch_all_sources", acks_late=True)
+@celery_app.task(name="app.tasks.fetch.fetch_all_sources", acks_late=True)
 def fetch_all_sources() -> dict:
     settings = get_settings()
     lock_key = "task:fetch_all_sources"
@@ -126,7 +126,7 @@ def fetch_all_sources() -> dict:
         release_redis_lock(lock_key)
 
 
-@app.task(name="app.tasks.fetch.check_source_health", acks_late=True)
+@celery_app.task(name="app.tasks.fetch.check_source_health", acks_late=True)
 def check_source_health() -> dict:
     settings = get_settings()
     from app.db.session import get_session

@@ -17,7 +17,7 @@ from app.publisher.hold import enqueue_hold, needs_ai_rerun, should_hold
 from app.publisher.outbox import enqueue_initial
 from app.publisher.tracks import is_in_hold_queue, route_track
 from app.resilience.task_lock import acquire_redis_lock, release_redis_lock
-from app.tasks.celery_app import app
+from app.tasks.celery_app import celery_app
 
 
 def _build_messages_block(session, cluster_id: int) -> str:
@@ -33,7 +33,7 @@ def _build_messages_block(session, cluster_id: int) -> str:
     return "\n---\n".join(parts)
 
 
-@app.task(name="app.tasks.ai.process_cloud_ai", acks_late=True)
+@celery_app.task(name="app.tasks.ai.process_cloud_ai", acks_late=True)
 def process_cloud_ai() -> dict:
     settings = get_settings()
     lock_key = "task:process_cloud_ai"
