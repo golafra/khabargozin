@@ -11,9 +11,7 @@ from app.db.models.ai_result import AIResult
 from app.db.models.cluster import Cluster
 from app.db.models.hold_queue import HoldQueue
 from app.ai.schemas import AIClusterOutput
-from app.publisher.formatter import format_publication_html
-from app.publisher.outbox import enqueue_initial
-from app.publisher.tracks import route_track
+from app.publisher.routing import apply_publish_routing
 from app.resilience.locking import hold_lock
 
 
@@ -95,10 +93,7 @@ def route_promoted_hold(session: Session, cluster: Cluster) -> None:
         sensitivity=ai_row.sensitivity,
         needs_human_review=ai_row.needs_human_review,
     )
-    track = route_track(session, result, cluster.independent_source_count)
-    rendered = format_publication_html(session, cluster.id, result)
-    cluster.status = "ai_done"
-    enqueue_initial(session, cluster, result, rendered, track)
+    apply_publish_routing(session, cluster, result)
 
 
 def promote_hold_cluster(session: Session, cluster: Cluster, hold: HoldQueue) -> None:

@@ -12,10 +12,9 @@ from app.db.models.ai_result import AIResult
 from app.db.models.cluster import Cluster
 from app.db.models.message import Message
 from app.db.models.source import Source
-from app.publisher.formatter import format_publication_html
 from app.publisher.hold import enqueue_hold, needs_ai_rerun, should_hold
-from app.publisher.outbox import enqueue_initial
-from app.publisher.tracks import is_in_hold_queue, route_track
+from app.publisher.routing import apply_publish_routing
+from app.publisher.tracks import is_in_hold_queue
 from app.resilience.task_lock import acquire_redis_lock, release_redis_lock
 from app.tasks.celery_app import celery_app
 
@@ -109,7 +108,6 @@ def process_cloud_ai() -> dict:
             cluster.last_ai_processed_at = datetime.now(timezone.utc)
             cluster.ai_independent_source_count_at_run = cluster.independent_source_count
             cluster.sensitivity = result.sensitivity
-            cluster.status = "ai_done"
 
             if should_hold(
                 result.editorial_priority,
@@ -120,29 +118,7 @@ def process_cloud_ai() -> dict:
                 enqueue_hold(session, cluster.id, cluster.independent_source_count)
                 cluster.status = "hold"
             else:
-                track = route_track(
-                    session,
-                    result,
-                    cluster.independent_source_count,
-                    locked_for_hold=cluster.locked_for_hold,
-                )
-                if not ok:
-                    track = "reject"
-                rendered = format_publication_html(session, cluster.id, result)
-                enqueue_initial(session, cluster, result, rendered, track)
-
-                if track == "fast" and settings.PUBLISH_MODE != "dry_run":
-                    from app.db.models.publication_outbox import PublicationOutbox
-                    from app.publisher.outbox import process_outbox_item
-
-                    outbox_row = session.scalar(
-                        select(PublicationOutbox).where(
-                            PublicationOutbox.cluster_id == cluster.id,
-                            PublicationOutbox.operation_type == "initial",
-                        )
-                    )
-                    if outbox_row:
-                        process_outbox_item(session, outbox_row.id)
+                apply_publish_routing(session, cluster, result)
 
             session.commit()
             processed += 1

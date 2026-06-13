@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.audit import write_audit_log
 from app.config import get_settings
 from app.db.models.message import Message
+from app.db.models.cluster import Cluster
 from app.db.models.source import Source
 from app.fetcher.base import FetchCursor, RawMessage
 from app.fetcher.factory import get_fetcher
@@ -153,7 +154,15 @@ def _recheck_recent_edits(session: Session, source: Source, fetcher) -> int:
     cutoff = now - timedelta(hours=settings.FETCH_EDIT_LOOKBACK_HOURS)
     message_ids = session.scalars(
         select(Message.message_id)
-        .where(Message.source_id == source.id, Message.published_at >= cutoff)
+        .join(Cluster, Message.cluster_id == Cluster.id, isouter=True)
+        .where(
+            Message.source_id == source.id,
+            Message.published_at >= cutoff,
+            (
+                Message.edit_date.isnot(None)
+                | Cluster.status.in_(("published", "hold"))
+            ),
+        )
         .order_by(Message.published_at.desc())
         .limit(settings.FETCH_EDIT_RECHECK_LIMIT)
     ).all()
@@ -169,7 +178,6 @@ def _recheck_recent_edits(session: Session, source: Source, fetcher) -> int:
                 updated += 1
         except Exception:
             session.rollback()
-        time.sleep(settings.ICA_FETCH_DELAY_SECONDS)
     return updated
 
 

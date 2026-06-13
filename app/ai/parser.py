@@ -83,4 +83,20 @@ def parse_with_schema(text: str, schema: Type[T]) -> T:
 
 
 def parse_cluster_output(text: str) -> AIClusterOutput:
-    return parse_with_schema(text, AIClusterOutput)
+    try:
+        return parse_with_schema(text, AIClusterOutput)
+    except Exception:
+        fallback = _extract_title_content_fallback(text)
+        if fallback:
+            return AIClusterOutput.model_validate(normalize_cluster_data(fallback))
+        raise
+
+
+def _extract_title_content_fallback(text: str) -> dict[str, Any] | None:
+    """Recover from GPT responses that use title/content instead of schema."""
+    data: dict[str, Any] = {}
+    for src_key, dst_key in (("title", "headline"), ("content", "summary"), ("headline", "headline"), ("summary", "summary")):
+        match = re.search(rf'"{re.escape(src_key)}"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+        if match and dst_key not in data:
+            data[dst_key] = match.group(1)
+    return data if data.get("headline") or data.get("summary") else None
