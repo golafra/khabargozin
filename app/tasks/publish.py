@@ -72,9 +72,12 @@ def check_hold_confirmations_task() -> dict:
 
     session = get_session()
     try:
-        count = check_hold_confirmations(session)
+        result = check_hold_confirmations(session)
         session.commit()
-        return {"processed": count}
+        if result.get("promoted", 0) > 0:
+            from app.tasks.ai import process_cloud_ai
+            process_cloud_ai.delay()
+        return result
     finally:
         session.close()
 

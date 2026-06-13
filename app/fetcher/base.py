@@ -27,7 +27,13 @@ class RawMessage:
     message_type: str = "text"
 
 
+@dataclass
+class FetchBatchResult:
+    messages: list[RawMessage]
+    backfill_complete: bool = True
+
+
 class FetcherBackend(Protocol):
-    def fetch_messages(self, source: Source, cursor: FetchCursor) -> list[RawMessage]:
+    def fetch_messages(self, source: Source, cursor: FetchCursor) -> FetchBatchResult:
         """Fetch messages for a source within the cursor window."""
         ...

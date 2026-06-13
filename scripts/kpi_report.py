@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.db.models.ai_result import AIResult
 from app.db.models.audit_log import AuditLog
 from app.db.models.cluster import Cluster
+from app.db.models.message import Message
 from app.db.models.publication import Publication
 from app.db.models.source import Source
 from app.db.session import get_session
@@ -36,7 +37,7 @@ def main() -> int:
         ) or 0
         rejected = session.scalar(
             select(func.count()).select_from(AuditLog).where(
-                AuditLog.reason.in_(("below_threshold", "ai_reject")),
+                AuditLog.reason.in_(("below_threshold", "ai_reject", "hold_expired")),
                 AuditLog.created_at >= since,
             )
         ) or 0
@@ -55,6 +56,12 @@ def main() -> int:
                 Cluster.distinct_sources > 1,
                 Cluster.independent_source_count == 1,
                 Cluster.created_at >= since,
+            )
+        ) or 0
+        retracted = session.scalar(
+            select(func.count()).select_from(Publication).where(
+                Publication.is_retracted.is_(True),
+                Publication.published_at >= since,
             )
         ) or 0
 
@@ -94,22 +101,46 @@ def main() -> int:
             )
         ) or 0
 
+        # Time-to-publish (avg minutes)
+        pubs = session.scalars(
+            select(Publication).where(Publication.published_at >= since)
+        ).all()
+        ttp_samples = []
+        for pub in pubs:
+            first_msg = session.scalar(
+                select(func.min(Message.published_at)).where(Message.cluster_id == pub.cluster_id)
+            )
+            if first_msg and pub.published_at:
+                delta = (pub.published_at - first_msg).total_seconds() / 60.0
+                ttp_samples.append(delta)
+        avg_ttp = sum(ttp_samples) / len(ttp_samples) if ttp_samples else 0.0
+
+        budget_pct = (float(token_cost) / settings.OPENAI_MONTHLY_BUDGET_USD) * 100
+
         print("=== Khabargozin KPI Report ===")
         print(f"Period since: {since.isoformat()}")
         print(f"\nClusters created: {total_clusters}")
         print(f"Rejected/filtered: {rejected}")
+        if total_clusters:
+            print(f"Filter rate: {rejected / total_clusters * 100:.1f}%")
         print(f"Published: {published} (fast={fast_count}, batch={batch_count})")
         print(f"Multi-source published: {multi_source}")
         print(f"Merged but single-independent (over-merge signal): {single_merge}")
+        print(f"Retracted: {retracted}")
+        if published:
+            print(f"Retraction rate: {retracted / published * 100:.1f}%")
+        print(f"Avg time-to-publish: {avg_ttp:.1f} min")
 
         print(f"\n--- AI Cost (month) ---")
         print(f"Tokens: {prompt_tokens} prompt + {completion_tokens} completion")
-        print(f"Cost estimate: ${float(token_cost):.4f} / ${settings.OPENAI_MONTHLY_BUDGET_USD}")
+        print(f"Cost estimate: ${float(token_cost):.4f} / ${settings.OPENAI_MONTHLY_BUDGET_USD} ({budget_pct:.0f}%)")
         if circuit_breaker_open(session):
-            print("⚠ Circuit breaker ACTIVE")
+            print("WARNING: Circuit breaker ACTIVE")
+        elif budget_pct >= 80:
+            print(f"WARNING: Budget at {budget_pct:.0f}% — approaching limit")
 
         if stale_sources:
-            print(f"\n⚠ Stale sources ({len(stale_sources)}):")
+            print(f"\nWARNING: Stale sources ({len(stale_sources)}):")
             for s in stale_sources:
                 print(f"  @{s.username} last_fetch={s.last_successful_fetch_at}")
 

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from app.fetcher.base import RawMessage
+from app.fetcher.base import FetchBatchResult, RawMessage
 from app.fetcher.factory import MockFetcher, get_fetcher
 
 
@@ -14,7 +14,9 @@ def test_mock_fetcher_returns_injected_messages():
         username = "TestChannel"
 
     fetcher = MockFetcher({"TestChannel": [raw]})
-    assert len(fetcher.fetch_messages(FakeSource(), None)) == 1  # type: ignore
+    result = fetcher.fetch_messages(FakeSource(), None)  # type: ignore
+    assert len(result.messages) == 1
+    assert result.backfill_complete is True
 
 
 def test_get_fetcher_mock_mode(monkeypatch):

@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     ICA_RATE_LIMIT_PER_MIN: int = 15
     ICA_FETCH_DELAY_SECONDS: float = 4.0
     SOURCE_STALE_ALERT_MINUTES: int = 120
-    FETCHER_BACKEND: Literal["ica", "mock"] = "ica"
+    FETCHER_BACKEND: Literal["ica", "mock", "telethon"] = "ica"
 
     # Merge
     MERGE_OPEN_SIM: float = 0.72
@@ -105,6 +105,15 @@ class Settings(BaseSettings):
     MEDIA_MIN_ASPECT_RATIO: float = 0.5
     MEDIA_MAX_ASPECT_RATIO: float = 2.0
     MEDIA_MAX_VIDEO_SECONDS: int = 60
+    MEDIA_MIN_PREVIEW_BYTES: int = 5000
+    MEDIA_PREVIEW_ENABLED: bool = True
+
+    # Clustering
+    CLUSTER_BATCH_SIZE: int = 100
+
+    # Fetch edit tracking
+    FETCH_EDIT_LOOKBACK_HOURS: int = 48
+    FETCH_EDIT_RECHECK_LIMIT: int = 30
 
     # Outbox
     OUTBOX_LOCK_TIMEOUT_MINUTES: int = 5

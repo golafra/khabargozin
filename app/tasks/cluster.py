@@ -17,7 +17,9 @@ from app.clustering.scorer import score_cluster
 from app.clustering.threshold import effective_threshold, should_skip_clustering
 from app.config import get_settings
 from app.db.models.cluster import Cluster
+from app.db.models.hold_queue import HoldQueue
 from app.db.models.message import Message
+from app.publisher.hold import update_hold_confirmation
 from app.publisher.retraction import detect_retraction_candidates, process_retraction_candidate
 from app.publisher.supplemental import process_supplemental
 from app.resilience.locking import mark_slow_op
@@ -38,6 +40,7 @@ def _process_message(session: Session, message: Message) -> None:
     if target_id:
         attach_message_to_cluster(session, message.id, target_id)
         score_cluster(session, target_id)
+        update_hold_confirmation(session, target_id)
         return
 
     published_target = find_published_merge_target(session, message, embedding)
@@ -69,7 +72,7 @@ def cluster_pending_messages() -> dict:
 
         threshold = effective_threshold(session)
         pending = session.scalars(
-            select(Message).where(Message.cluster_id.is_(None)).order_by(Message.published_at.asc()).limit(100)
+            select(Message).where(Message.cluster_id.is_(None)).order_by(Message.published_at.asc()).limit(settings.CLUSTER_BATCH_SIZE)
         ).all()
 
         processed = 0

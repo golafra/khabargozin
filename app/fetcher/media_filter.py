@@ -1,8 +1,12 @@
-"""Media filtering — MVP simple rules."""
+"""Media filtering — MVP + phase 2 preview checks."""
 
 from typing import Any, Optional
 
+import httpx
+
 from app.config import get_settings
+
+ICA_MEDIA_BASE = "https://tg.i-c-a.su/media"
 
 
 def extract_media_meta(media: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
@@ -53,7 +57,28 @@ def _best_photo_size(sizes: list[dict]) -> Optional[dict]:
     return max(candidates, key=lambda s: (s.get("w", 0) or 0) * (s.get("h", 0) or 0))
 
 
-def is_media_acceptable(media_meta: dict[str, Any]) -> bool:
+def fetch_preview_size(channel: str, message_id: int) -> Optional[int]:
+    """HEAD request to ICA preview endpoint — returns Content-Length if available."""
+    settings = get_settings()
+    if not settings.MEDIA_PREVIEW_ENABLED:
+        return None
+    url = f"{ICA_MEDIA_BASE}/{channel}/{message_id}/preview"
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.head(url)
+            if resp.status_code == 200:
+                return int(resp.headers.get("content-length", 0) or 0)
+    except Exception:
+        return None
+    return None
+
+
+def is_media_acceptable(
+    media_meta: dict[str, Any],
+    *,
+    channel: Optional[str] = None,
+    message_id: Optional[int] = None,
+) -> bool:
     settings = get_settings()
     width = media_meta.get("width")
     height = media_meta.get("height")
@@ -64,6 +89,10 @@ def is_media_acceptable(media_meta: dict[str, Any]) -> bool:
     if media_meta.get("type") == "video":
         duration = media_meta.get("duration") or 0
         if duration > settings.MEDIA_MAX_VIDEO_SECONDS:
+            return False
+    if channel and message_id and media_meta.get("type") == "photo":
+        preview_size = fetch_preview_size(channel, message_id)
+        if preview_size is not None and 0 < preview_size < settings.MEDIA_MIN_PREVIEW_BYTES:
             return False
     return True
 

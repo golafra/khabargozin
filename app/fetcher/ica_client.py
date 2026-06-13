@@ -12,7 +12,7 @@ import httpx
 
 from app.config import get_settings
 from app.db.models.source import Source
-from app.fetcher.base import FetchCursor, FetcherBackend, RawMessage
+from app.fetcher.base import FetchBatchResult, FetchCursor, FetcherBackend, RawMessage
 from app.fetcher.media_filter import extract_media_meta, is_media_acceptable
 
 
@@ -49,7 +49,7 @@ class ICAFetcher(FetcherBackend):
             last_response.raise_for_status()
         raise httpx.HTTPError(f"ICA request failed after {retries} retries: {url}")
 
-    def fetch_messages(self, source: Source, cursor: FetchCursor) -> list[RawMessage]:
+    def fetch_messages(self, source: Source, cursor: FetchCursor) -> FetchBatchResult:
         collected: list[RawMessage] = []
         overlap_start = cursor.overlap_start
         page = 1
@@ -66,7 +66,7 @@ class ICAFetcher(FetcherBackend):
                 break
 
             for raw in messages:
-                parsed = self._parse_message(raw)
+                parsed = self._parse_message(raw, source.username)
                 if overlap_start and parsed.published_at < overlap_start:
                     reached_overlap = True
                     break
@@ -82,9 +82,23 @@ class ICAFetcher(FetcherBackend):
             if page <= self._settings.FETCH_MAX_PAGES:
                 time.sleep(self._settings.FETCH_PAGINATION_DELAY_SECONDS)
 
-        return collected
+        backfill_complete = reached_overlap or page < self._settings.FETCH_MAX_PAGES
+        return FetchBatchResult(messages=collected, backfill_complete=backfill_complete)
 
-    def _parse_message(self, raw: dict[str, Any]) -> RawMessage:
+    def fetch_message_by_id(self, source: Source, message_id: int) -> Optional[RawMessage]:
+        """Re-fetch a single message for edit_date updates."""
+        url = f"{self.BASE_URL}/{source.username}/{message_id}"
+        try:
+            payload = self._get_page(url)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (404, 400):
+                return None
+            raise
+        if not isinstance(payload, dict) or "id" not in payload:
+            return None
+        return self._parse_message(payload, source.username)
+
+    def _parse_message(self, raw: dict[str, Any], channel: str) -> RawMessage:
         published_at = datetime.fromtimestamp(raw["date"], tz=timezone.utc)
         edit_date = None
         if raw.get("edit_date"):
@@ -96,7 +110,9 @@ class ICAFetcher(FetcherBackend):
         message_type = "text"
         if media_meta:
             message_type = media_meta.get("type", "media")
-            if not is_media_acceptable(media_meta):
+            if not is_media_acceptable(
+                media_meta, channel=channel, message_id=raw["id"]
+            ):
                 media_meta = None
 
         reply_to = raw.get("reply_to")
