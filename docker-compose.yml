@@ -66,5 +66,20 @@ services:
     profiles:
       - monitoring
 
+  admin:
+    build: .
+    command: uvicorn app.admin.app:app --host 0.0.0.0 --port 8080
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
 volumes:
   pgdata:

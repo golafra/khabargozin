@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}خوشه‌ها — خبرگزین{% endblock %}
+{% block content %}
+<div class="filters">
+  <a href="/clusters" class="{% if not filter_status %}active{% endif %}">همه</a>
+  {% for st in ['ai_ready','ai_done','ai_failed','below_threshold','published','hold','scored'] %}
+  {% if status_counts.get(st) %}
+  <a href="/clusters?status={{ st }}" class="{% if filter_status == st %}active{% endif %}">
+    {{ st }} ({{ status_counts[st] }})
+  </a>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<table>
+  <tr><th>#</th><th>status</th><th>امتیاز</th><th>منابع</th><th>به‌روزرسانی</th></tr>
+  {% for c in clusters %}
+  <tr>
+    <td><a href="/clusters/{{ c.id }}">{{ c.id }}</a></td>
+    <td>
+      <span class="badge {% if c.status == 'ai_failed' %}err{% elif c.status == 'published' %}ok{% elif c.status == 'ai_ready' %}warn{% endif %}">
+        {{ c.status }}
+      </span>
+    </td>
+    <td>{{ "%.2f"|format(c.cluster_score) if c.cluster_score else '—' }}</td>
+    <td>{{ c.independent_source_count }} / {{ c.distinct_sources }}</td>
+    <td>{{ c.updated_at.strftime('%m-%d %H:%M') if c.updated_at else '—' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" style="color:var(--muted)">خوشه‌ای یافت نشد.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

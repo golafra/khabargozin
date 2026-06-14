@@ -144,6 +144,10 @@ class Settings(BaseSettings):
     APP_START_TIME: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     EMBEDDING_DIM: int = 384
 
+    # Admin panel
+    ADMIN_PASSWORD: str = ""
+    ADMIN_PORT: int = 8080
+
     @property
     def ica_min_interval_seconds(self) -> float:
         return 60.0 / max(self.ICA_RATE_LIMIT_PER_MIN, 1)

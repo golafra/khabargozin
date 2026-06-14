@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}مسیر پردازش — خبرگزین{% endblock %}
+{% block content %}
+<div class="hours-bar">
+  <span style="color:var(--muted)">پیام‌های خوانده‌شده از:</span>
+  {% for h in [1, 3, 6, 12, 24] %}
+  <a href="/pipeline?hours={{ h }}" class="{% if hours == h %}active{% endif %}">{{ h }} ساعت</a>
+  {% endfor %}
+  <span class="btn" style="border-color:var(--border)">{{ since.strftime('%H:%M') }} UTC</span>
+</div>
+
+<p style="color:var(--muted);margin-top:0;font-size:.85rem">
+  {{ traces|length }} خوشه با فعالیت در این بازه
+  {% if unclustered %} · {{ unclustered|length }} پیام هنوز خوشه‌نشده{% endif %}
+</p>
+
+{% for trace, stages in traces %}
+{% set c = trace.cluster %}
+<div class="trace">
+  <div class="trace-head">
+    <div>
+      <a href="/clusters/{{ c.id }}"><strong>خوشه #{{ c.id }}</strong></a>
+      <span class="badge {% if c.status == 'published' %}ok{% elif c.status == 'ai_failed' %}err{% elif c.status == 'below_threshold' %}warn{% endif %}">{{ c.status }}</span>
+    </div>
+    <div class="meta">
+      امتیاز {{ "%.2f"|format(c.cluster_score) if c.cluster_score else '—' }}
+      · {{ c.independent_source_count }} منبع مستقل
+      · {{ trace.messages_in_window|length }} پیام جدید / {{ trace.messages|length }} کل
+      · {{ trace.window_latest.strftime('%H:%M') }}
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step {{ stages.fetch }}">
+      <div class="step-title"><span class="num">①</span> جمع‌آوری</div>
+      {% for msg, src in trace.messages_in_window[:4] %}
+      <div class="msg in-window" style="margin:.35rem 0;padding:.4rem .5rem;font-size:.78rem">
+        <span class="src">@{{ src.username }}</span>
+        {{ msg.created_at.strftime('%H:%M') }}
+        <div>{{ (msg.text or '')[:120] }}{% if msg.text and msg.text|length > 120 %}…{% endif %}</div>
+      </div>
+      {% endfor %}
+      {% if trace.messages_in_window|length > 4 %}
+      <div style="color:var(--muted);font-size:.75rem">+ {{ trace.messages_in_window|length - 4 }} پیام دیگر</div>
+      {% endif %}
+    </div>
+
+    <div class="step {{ stages.cluster }}">
+      <div class="step-title"><span class="num">②</span> خوشه‌بندی</div>
+      <div>ادغام {{ trace.messages|length }} پیام</div>
+      <div>{{ c.distinct_sources }} منبع · score {{ "%.1f"|format(c.cluster_score) if c.cluster_score else '—' }}</div>
+    </div>
+
+    <div class="step {{ stages.threshold }}">
+      <div class="step-title"><span class="num">③</span> آستانه</div>
+      {% if c.status == 'below_threshold' %}
+      <span class="err">رد شد</span>
+      {% if c.status_reason %}<div>{{ c.status_reason }}</div>{% endif %}
+      {% elif stages.threshold == 'skip' %}
+      <span>—</span>
+      {% else %}
+      <span class="ok">عبور</span>
+      {% endif %}
+    </div>
+
+    <div class="step {{ stages.ai }}">
+      <div class="step-title"><span class="num">④</span> تحلیل AI</div>
+      {% if trace.ai %}
+      <div><strong>{{ trace.ai.headline[:80] }}{% if trace.ai.headline|length > 80 %}…{% endif %}</strong></div>
+      <div style="color:var(--muted)">{{ trace.ai.status }} · conf {{ trace.ai.confidence }}</div>
+      {% elif c.status == 'ai_ready' %}
+      <span class="warn">در صف</span>
+      {% elif c.status == 'ai_failed' %}
+      <span class="err">ناموفق</span>
+      {% else %}
+      <span>—</span>
+      {% endif %}
+    </div>
+
+    <div class="step {{ stages.outbox }}">
+      <div class="step-title"><span class="num">⑤</span> Outbox</div>
+      {% if trace.outbox %}
+      <span class="badge {% if trace.outbox.status == 'sent' %}ok{% elif trace.outbox.status == 'pending' %}warn{% endif %}">{{ trace.outbox.track }} / {{ trace.outbox.status }}</span>
+      {% else %}
+      <span>—</span>
+      {% endif %}
+    </div>
+
+    <div class="step {{ stages.publish }}">
+      <div class="step-title"><span class="num">⑥</span> انتشار</div>
+      {% if trace.publication %}
+      <span class="ok">post {{ trace.publication.telegram_post_id }}</span>
+      <div style="font-size:.75rem;color:var(--muted)">{{ trace.publication.published_at.strftime('%H:%M') }}</div>
+      {% else %}
+      <span>—</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if trace.messages or trace.ai %}
+  <div class="out-block">
+    <h4>مقایسه ورودی ↔ خروجی</h4>
+    <div class="compare">
+      <div>
+        <div style="color:var(--muted);font-size:.75rem;margin-bottom:.35rem">پیام‌های منبع (اولین‌ها)</div>
+        {% for msg, src in trace.messages[:3] %}
+        <div class="msg" style="font-size:.8rem">
+          <span class="src">@{{ src.username }}</span>
+          <div>{{ (msg.text or '')[:250] }}{% if msg.text and msg.text|length > 250 %}…{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div>
+        <div style="color:var(--muted);font-size:.75rem;margin-bottom:.35rem">خروجی AI / انتشار</div>
+        {% if trace.ai %}
+        <div class="msg" style="font-size:.8rem;border-color:var(--ok)">
+          <strong>{{ trace.ai.headline }}</strong>
+          <div style="margin-top:.35rem">{{ trace.ai.summary[:300] }}{% if trace.ai.summary|length > 300 %}…{% endif %}</div>
+        </div>
+        {% elif trace.outbox and trace.outbox.payload_preview %}
+        <pre style="margin:0;font-size:.75rem">{{ trace.outbox.payload_preview[:400] }}</pre>
+        {% else %}
+        <div style="color:var(--muted);font-size:.8rem">هنوز خروجی نهایی ندارد</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<p style="color:var(--muted)">در {{ hours|int if hours == hours|int else hours }} ساعت گذشته پیام خوشه‌شده‌ای خوانده نشده.</p>
+{% endfor %}
+
+{% if unclustered %}
+<div class="section">
+  <h2>در انتظار خوشه‌بندی ({{ unclustered|length }})</h2>
+  {% for item in unclustered %}
+  <div class="msg in-window">
+    <span class="src">@{{ item.source.username }}</span>
+    {{ item.message.created_at.strftime('%H:%M') }}
+    <div>{{ (item.message.text or '')[:200] }}{% if item.message.text and item.message.text|length > 200 %}…{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

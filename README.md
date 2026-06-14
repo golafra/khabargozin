@@ -63,6 +63,16 @@ python -m scripts.reconcile_outbox
 python -m scripts.kpi_report --date today
 ```
 
+## پنل رصد (Admin)
+
+```bash
+# در .env مقدار ADMIN_PASSWORD را تنظیم کنید
+docker compose up -d admin
+# http://localhost:8080 — ورود: admin / ADMIN_PASSWORD
+```
+
+صفحات: داشبورد KPI، **مسیر پردازش** (ورودی→خروجی در بازه زمانی)، منابع، خوشه‌ها. فقط read-only.
+
 ## Celery Beat
 
 پس از تغییر `BEAT_*` در `.env`:
