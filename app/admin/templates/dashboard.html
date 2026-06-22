@@ -19,6 +19,42 @@
     <div class="label">{{ "%.0f"|format(stats.ai_budget_pct) }}% از ${{ stats.ai_budget_usd }}</div></div>
 </div>
 
+<div class="section">
+  <h2>فعالیت {{ stats.activity_hours|default(3)|int }} ساعت اخیر <span style="font-weight:normal;font-size:.8rem">(سیگنال، نه همه پیام‌ها)</span></h2>
+  <div class="grid">
+    <div class="card"><div class="label">خوانده‌شده (fetch)</div><div class="value">{{ stats.messages_fetched_recent|default(0) }}</div></div>
+    <div class="card"><div class="label">خوشه‌شده</div><div class="value">{{ stats.messages_clustered_recent|default(0) }}</div></div>
+    <div class="card"><div class="label">چندمنبعی</div>
+      <div class="value {% if stats.multi_source_recent|default(0) %}ok{% endif %}">{{ stats.multi_source_recent|default(0) }}</div>
+      <div class="label">ادغام بین کانال‌ها</div></div>
+    <div class="card"><div class="label">زیر آستانه</div><div class="value">{{ stats.below_threshold_recent|default(0) }}</div>
+      <div class="label">تک‌منبعی/کم‌امتیاز</div></div>
+  </div>
+  <p style="color:var(--muted);font-size:.8rem;margin:.5rem 0 0">
+    هر پیام جدید با خوشه‌های <strong>باز</strong> {{ stats.merge_window_hours|default(6)|int }} ساعت گذشته (همه کانال‌ها) مقایسه می‌شود — pgvector، نه اسکن خطی.
+    <a href="/pipeline?hours={{ stats.activity_hours|default(3)|int }}">مسیر پردازش ←</a>
+  </p>
+</div>
+
+{% if stats.notable_clusters|default([]) %}
+<div class="section">
+  <h2>رویدادهای چندمنبعی اخیر</h2>
+  <table>
+    <tr><th>خوشه</th><th>status</th><th>امتیاز</th><th>منابع</th><th>پیام</th><th>عنوان AI</th></tr>
+    {% for cluster, ai, msg_count in stats.notable_clusters %}
+    <tr>
+      <td><a href="/clusters/{{ cluster.id }}">#{{ cluster.id }}</a></td>
+      <td><span class="badge {% if cluster.status == 'published' %}ok{% elif cluster.status == 'ai_failed' %}err{% endif %}">{{ cluster.status }}</span></td>
+      <td>{{ "%.1f"|format(cluster.cluster_score) if cluster.cluster_score else '—' }}</td>
+      <td>{{ cluster.independent_source_count }}</td>
+      <td>{{ msg_count }}</td>
+      <td>{{ (ai.headline[:55] + '…') if ai and ai.headline|length > 55 else (ai.headline if ai else '—') }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
 {% if stats.circuit_breaker %}
 <div class="section"><p class="err">⚠ Circuit breaker فعال — بودجه AI تمام شده</p></div>
 {% endif %}

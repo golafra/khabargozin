@@ -32,6 +32,14 @@ class DashboardStats:
     ai_budget_pct: float = 0.0
     stale_sources: list[Source] = field(default_factory=list)
     recent_publications: list[tuple[Publication, AIResult | None]] = field(default_factory=list)
+    # Pipeline activity (last 3h) — signals, not every message
+    activity_hours: float = 3.0
+    messages_fetched_recent: int = 0
+    messages_clustered_recent: int = 0
+    multi_source_recent: int = 0
+    below_threshold_recent: int = 0
+    merge_window_hours: float = 6.0
+    notable_clusters: list[tuple[Cluster, AIResult | None, int]] = field(default_factory=list)
 
 
 def get_dashboard(session: Session) -> DashboardStats:
@@ -99,7 +107,76 @@ def get_dashboard(session: Session) -> DashboardStats:
         )
         stats.recent_publications.append((pub, ai))
 
+    _fill_pipeline_activity(session, stats, settings, now)
+
     return stats
+
+
+def _fill_pipeline_activity(
+    session: Session,
+    stats: DashboardStats,
+    settings,
+    now: datetime,
+    hours: float = 3.0,
+) -> None:
+    """Aggregate recent pipeline signals for dashboard (not raw message flood)."""
+    since = now - timedelta(hours=hours)
+    stats.activity_hours = hours
+    stats.merge_window_hours = settings.CLUSTER_ACTIVE_WINDOW_MINUTES / 60.0
+
+    stats.messages_fetched_recent = session.scalar(
+        select(func.count()).select_from(Message).where(Message.created_at >= since)
+    ) or 0
+    stats.messages_clustered_recent = session.scalar(
+        select(func.count())
+        .select_from(Message)
+        .where(Message.created_at >= since, Message.cluster_id.isnot(None))
+    ) or 0
+
+    recent_cluster_ids = session.scalars(
+        select(Message.cluster_id)
+        .where(Message.created_at >= since, Message.cluster_id.isnot(None))
+        .distinct()
+    ).all()
+
+    if recent_cluster_ids:
+        stats.multi_source_recent = session.scalar(
+            select(func.count())
+            .select_from(Cluster)
+            .where(
+                Cluster.id.in_(recent_cluster_ids),
+                Cluster.independent_source_count >= 2,
+            )
+        ) or 0
+        stats.below_threshold_recent = session.scalar(
+            select(func.count())
+            .select_from(Cluster)
+            .where(
+                Cluster.id.in_(recent_cluster_ids),
+                Cluster.status == "below_threshold",
+            )
+        ) or 0
+
+    notable = session.scalars(
+        select(Cluster)
+        .where(
+            Cluster.independent_source_count >= 2,
+            Cluster.updated_at >= since,
+        )
+        .order_by(Cluster.cluster_score.desc().nullslast(), Cluster.updated_at.desc())
+        .limit(12)
+    ).all()
+    for cluster in notable:
+        ai = session.scalar(
+            select(AIResult)
+            .where(AIResult.cluster_id == cluster.id)
+            .order_by(AIResult.created_at.desc())
+            .limit(1)
+        )
+        msg_count = session.scalar(
+            select(func.count()).select_from(Message).where(Message.cluster_id == cluster.id)
+        ) or 0
+        stats.notable_clusters.append((cluster, ai, msg_count))
 
 
 def list_sources(session: Session) -> list[Source]:

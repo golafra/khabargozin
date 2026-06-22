@@ -71,6 +71,8 @@ docker compose up -d admin
 # http://localhost:8080 — ورود: admin / ADMIN_PASSWORD
 ```
 
+**راهنمای کامل:** [`docs/admin_guide.md`](docs/admin_guide.md) — کار با پنل، تست اخبار، عیب‌یابی و CLI مکمل.
+
 صفحات: داشبورد KPI، **مسیر پردازش** (ورودی→خروجی در بازه زمانی)، منابع، خوشه‌ها. فقط read-only.
 
 ## Celery Beat

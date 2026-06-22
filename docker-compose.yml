@@ -68,7 +68,7 @@ services:
 
   admin:
     build: .
-    command: uvicorn app.admin.app:app --host 0.0.0.0 --port 8080
+    command: uvicorn app.admin.app:app --host 0.0.0.0 --port 8080 --reload
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
