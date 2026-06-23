@@ -1,5 +1,6 @@
 """pgvector similarity search — all similarity in PostgreSQL."""
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -45,4 +46,48 @@ def find_similar_clusters(
             "lim": limit,
         },
     ).fetchall()
-    return [(int(r[0]), float(r[1])) for r in rows]
+    out: list[tuple[int, float]] = []
+    for row in rows:
+        sim = float(row[1])
+        if math.isnan(sim) or math.isinf(sim):
+            continue
+        out.append((int(row[0]), sim))
+    return out
+
+
+def find_recent_published_similar(
+    session: Session,
+    query_embedding: list[float],
+    *,
+    hours: int | None = None,
+    limit: int = 8,
+) -> list[tuple[int, float]]:
+    """Similar published clusters by publication time (not cluster window_start)."""
+    settings = get_settings()
+    if hours is None:
+        hours = settings.DUPLICATE_PUBLISH_HOURS
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    vec_literal = "[" + ",".join(str(v) for v in query_embedding) + "]"
+    sql = text("""
+        SELECT c.id, 1 - (c.centroid_embedding <=> CAST(:vec AS vector)) AS sim
+        FROM clusters c
+        JOIN publications p ON p.cluster_id = c.id
+        WHERE c.status = 'published'
+          AND p.is_retracted IS FALSE
+          AND p.published_at > :cutoff
+          AND c.centroid_embedding IS NOT NULL
+        ORDER BY c.centroid_embedding <=> CAST(:vec AS vector)
+        LIMIT :lim
+    """)
+    rows = session.execute(
+        sql,
+        {"vec": vec_literal, "cutoff": cutoff, "lim": limit},
+    ).fetchall()
+    out: list[tuple[int, float]] = []
+    for row in rows:
+        sim = float(row[1])
+        if math.isnan(sim) or math.isinf(sim):
+            continue
+        out.append((int(row[0]), sim))
+    return out

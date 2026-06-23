@@ -61,9 +61,16 @@ class Settings(BaseSettings):
     # Merge
     MERGE_OPEN_SIM: float = 0.72
     MERGE_OPEN_SIM_NER: float = 0.65
-    MERGE_PUBLISHED_SIM: float = 0.85
-    MERGE_PUBLISHED_SIM_HIGH: float = 0.90
+    MERGE_OPEN_SIM_TOPIC: float = 0.52
+    MERGE_TOPIC_OVERLAP: float = 0.30
+    MERGE_TOPIC_OVERLAP_STRONG: float = 0.42
+    MERGE_PUBLISHED_SIM: float = 0.72
+    MERGE_PUBLISHED_SIM_TOPIC: float = 0.55
+    MERGE_PUBLISHED_SIM_HIGH: float = 0.85
     MERGE_PUBLISHED_NER: float = 0.50
+    DUPLICATE_PUBLISH_SIM: float = 0.65
+    DUPLICATE_PUBLISH_SIM_TOPIC: float = 0.50
+    DUPLICATE_PUBLISH_HOURS: int = 24
     MERGE_EVENT_SIG: float = 0.40
     MERGE_NER_BOOST_THRESHOLD: float = 0.30
     SUPPLEMENT_MAX_DELTA_MINUTES: int = 720
@@ -85,7 +92,7 @@ class Settings(BaseSettings):
     OPENAI_MAX_TOKENS: int = 800
     OPENAI_MONTHLY_BUDGET_USD: float = 15.0
     AI_JSON_MAX_RETRIES: int = 2
-    PROMPT_VERSION: str = "v1"
+    PROMPT_VERSION: str = "v2"
     AI_SCHEMA_VERSION: str = "v1"
     FAST_MIN_CONFIDENCE: float = 0.75
     BATCH_MIN_CONFIDENCE: float = 0.60

@@ -1,5 +1,7 @@
 """Merge open clusters only — MVP."""
 
+import math
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -8,6 +10,7 @@ from app.clustering.embedder import embed_text
 from app.clustering.event_signature import build_event_signature
 from app.clustering.lineage import recalculate_independent_sources
 from app.clustering.ner import ner_overlap
+from app.clustering.topic_overlap import should_merge_open, topic_overlap
 from app.clustering.vector_search import find_similar_clusters
 from app.config import get_settings
 from app.db.models.cluster import Cluster
@@ -18,31 +21,84 @@ from app.resilience.locking import cluster_lock
 OPEN_STATUSES = ("pending", "scored", "ai_done")
 
 
-def find_merge_target(
+def _safe_score(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if math.isnan(value) or math.isinf(value):
+        return None
+    return round(value, 3)
+
+
+@dataclass
+class MergeSearchResult:
+    target_id: int | None = None
+    best_similarity: float | None = None
+    match_reason: str | None = None
+    candidates: list[dict] = field(default_factory=list)
+
+
+def search_merge_target(
     session: Session,
     message: Message,
     query_embedding: list[float],
-) -> int | None:
+) -> MergeSearchResult:
     settings = get_settings()
     candidates = find_similar_clusters(session, query_embedding, statuses=OPEN_STATUSES)
     text = message.text or ""
+    result = MergeSearchResult()
 
     for cluster_id, sim in candidates:
         cluster = session.get(Cluster, cluster_id)
         if not cluster or cluster.status not in OPEN_STATUSES:
             continue
 
-        ner_boost = 0.0
-        if text:
-            sample_msg = session.query(Message).filter_by(cluster_id=cluster_id).first()
-            if sample_msg and sample_msg.text:
-                ner_boost = ner_overlap(text, sample_msg.text)
+        sample_msg = session.query(Message).filter_by(cluster_id=cluster_id).first()
+        sample_text = (sample_msg.text or "") if sample_msg else ""
+        ner_boost = ner_overlap(text, sample_text) if text and sample_text else 0.0
 
-        if sim >= settings.MERGE_OPEN_SIM:
-            return cluster_id
-        if sim >= settings.MERGE_OPEN_SIM_NER and ner_boost >= settings.MERGE_NER_BOOST_THRESHOLD:
-            return cluster_id
-    return None
+        sample_src = ""
+        if sample_msg:
+            from app.db.models.source import Source
+
+            src = session.get(Source, sample_msg.source_id)
+            sample_src = src.username if src else ""
+
+        result.candidates.append(
+            {
+                "cluster_id": cluster_id,
+                "similarity": _safe_score(sim),
+                "ner_boost": _safe_score(ner_boost),
+                "topic_overlap": round(topic_overlap(text, sample_text), 3),
+                "status": cluster.status,
+                "score": cluster.cluster_score,
+                "sources": cluster.independent_source_count,
+                "preview": sample_text[:120],
+                "sample_source": sample_src,
+            }
+        )
+
+        if result.target_id is not None:
+            continue
+
+        if should_merge_open(sim, text, sample_text, ner_boost=ner_boost):
+            result.target_id = cluster_id
+            result.best_similarity = sim
+            if sim >= settings.MERGE_OPEN_SIM:
+                result.match_reason = "similarity"
+            elif topic_overlap(text, sample_text) >= settings.MERGE_TOPIC_OVERLAP:
+                result.match_reason = "similarity_topic"
+            else:
+                result.match_reason = "similarity_ner"
+
+    return result
+
+
+def find_merge_target(
+    session: Session,
+    message: Message,
+    query_embedding: list[float],
+) -> int | None:
+    return search_merge_target(session, message, query_embedding).target_id
 
 
 def attach_message_to_cluster(session: Session, message_id: int, cluster_id: int) -> None:

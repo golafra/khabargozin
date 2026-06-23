@@ -7,6 +7,7 @@ from typing import Any, Type, TypeVar
 from pydantic import BaseModel
 
 from app.ai.schemas import AIClusterOutput
+from app.ai.style import polish_cluster_text
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -70,6 +71,15 @@ def normalize_cluster_data(data: dict[str, Any]) -> dict[str, Any]:
         normalized["conflicts"] = []
     if "sources_used" not in normalized:
         normalized["sources_used"] = []
+
+    headline, summary, why = polish_cluster_text(
+        normalized.get("headline", "") or "",
+        normalized.get("summary", "") or "",
+        normalized.get("why_it_matters", "") or "",
+    )
+    normalized["headline"] = headline
+    normalized["summary"] = summary
+    normalized["why_it_matters"] = why
 
     return normalized
 

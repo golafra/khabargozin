@@ -179,8 +179,11 @@ def _fill_pipeline_activity(
         stats.notable_clusters.append((cluster, ai, msg_count))
 
 
-def list_sources(session: Session) -> list[Source]:
-    return list(session.scalars(select(Source).order_by(Source.username)).all())
+def list_sources(session: Session, *, include_inactive: bool = True) -> list[Source]:
+    q = select(Source).order_by(Source.username)
+    if not include_inactive:
+        q = q.where(Source.is_active.is_(True))
+    return list(session.scalars(q).all())
 
 
 def list_clusters(session: Session, status: str | None = None, limit: int = 80) -> list[Cluster]:

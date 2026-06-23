@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% set c = detail.cluster %}
+{% set c = story.cluster %}
+{% set m = story.mechanism %}
 {% block title %}خوشه {{ c.id }} — خبرگزین{% endblock %}
 {% block content %}
-<p><a href="/clusters">← بازگشت</a></p>
+<p><a href="/clusters">← بازگشت</a> · <a href="/published">انتشارها</a></p>
 
 <div class="grid" style="margin-bottom:1rem">
-  <div class="card"><div class="label">status</div><div class="value" style="font-size:1rem">{{ c.status }}</div></div>
+  <div class="card"><div class="label">وضعیت</div><div class="value" style="font-size:1rem">{{ c.status }}</div></div>
   <div class="card"><div class="label">امتیاز</div><div class="value">{{ "%.2f"|format(c.cluster_score) if c.cluster_score else '—' }}</div></div>
   <div class="card"><div class="label">منابع مستقل</div><div class="value">{{ c.independent_source_count }}</div></div>
   <div class="card"><div class="label">منابع متمایز</div><div class="value">{{ c.distinct_sources }}</div></div>
@@ -13,50 +14,118 @@
 
 {% if c.status_reason %}<p style="color:var(--muted)">دلیل: {{ c.status_reason }}</p>{% endif %}
 
-{% if detail.ai %}
 <div class="section">
-  <h2>نتیجه AI</h2>
-  <div class="card">
-    <p><strong>{{ detail.ai.headline }}</strong></p>
-    <p style="color:var(--muted)">{{ detail.ai.summary[:300] }}{% if detail.ai.summary|length > 300 %}…{% endif %}</p>
+  <h2>مکانیزم سیستم</h2>
+  <div class="mech-box">
     <p>
-      status={{ detail.ai.status }} · confidence={{ detail.ai.confidence }}
-      · priority={{ detail.ai.editorial_priority }}
-      · cost=${{ "%.4f"|format(detail.ai.cost_estimate_usd) }}
+      پنجره ادغام: <strong>{{ "%.1f"|format(m.merge_window_hours) }} ساعت</strong> ·
+      آستانه شباهت: <strong>{{ m.merge_sim_threshold }}</strong> ·
+      آستانه امتیاز انتشار: <strong>{{ m.score_threshold }}</strong>
+    </p>
+    <p style="color:var(--muted);margin:.5rem 0 0">
+      پیام‌های جدید با خوشه‌های باز در پنجره مقایسه می‌شوند (pgvector).
+      اگر شباهت ≥ {{ m.merge_sim_threshold }} باشد ادغام می‌شود؛ در غیر این صورت خوشه جدید ساخته می‌شود.
+    </p>
+  </div>
+</div>
+
+{% if story.publication %}
+<div class="section">
+  <h2>انتشار در کانال خروجی</h2>
+  <div class="card">
+    <p>
+      زمان انتشار: <strong>{{ fmt_dt(story.publication.published_at) }}</strong> ·
+      post_id={{ story.publication.telegram_post_id }} · track={{ story.publication.track }}
     </p>
   </div>
 </div>
 {% endif %}
 
-{% if detail.outbox %}
+{% if story.ai %}
+<div class="section">
+  <h2>نتیجه AI</h2>
+  <div class="card">
+    <p><strong>{{ story.ai.headline }}</strong></p>
+    <p style="color:var(--muted)">{{ story.ai.summary[:400] }}{% if story.ai.summary|length > 400 %}…{% endif %}</p>
+    <p style="font-size:.8rem;color:var(--muted)">
+      confidence={{ story.ai.confidence }} · priority={{ story.ai.editorial_priority }}
+    </p>
+  </div>
+</div>
+{% endif %}
+
+{% if story.outbox %}
 <div class="section">
   <h2>Outbox</h2>
   <p>
-    track=<span class="badge">{{ detail.outbox.track }}</span>
-    status=<span class="badge {% if detail.outbox.status == 'sent' %}ok{% elif detail.outbox.status == 'pending' %}warn{% endif %}">{{ detail.outbox.status }}</span>
-    {% if detail.outbox.error_message %}<br><span class="err">{{ detail.outbox.error_message }}</span>{% endif %}
+    track=<span class="badge">{{ story.outbox.track }}</span>
+    status=<span class="badge {% if story.outbox.status == 'sent' %}ok{% elif story.outbox.status == 'pending' %}warn{% endif %}">{{ story.outbox.status }}</span>
+    {% if story.outbox.error_message %}<br><span class="err">{{ story.outbox.error_message }}</span>{% endif %}
   </p>
-  {% if detail.outbox.payload_preview %}
-  <pre>{{ detail.outbox.payload_preview[:1500] }}</pre>
-  {% endif %}
-</div>
-{% endif %}
-
-{% if detail.publication %}
-<div class="section">
-  <h2>انتشار</h2>
-  <p>telegram_post_id={{ detail.publication.telegram_post_id }} · {{ detail.publication.published_at }}</p>
 </div>
 {% endif %}
 
 <div class="section">
-  <h2>پیام‌ها ({{ detail.messages|length }})</h2>
-  {% for msg, src in detail.messages %}
-  <div class="msg">
-    <span class="src">@{{ src.username }}</span>
-    <span style="color:var(--muted);font-size:.75rem"> · {{ msg.published_at.strftime('%H:%M') if msg.published_at else '' }}</span>
-    <div>{{ (msg.text or '')[:400] }}{% if msg.text and msg.text|length > 400 %}…{% endif %}</div>
+  <h2>پیام‌های منبع و تصمیم ادغام ({{ story.messages|length }})</h2>
+  {% for msg in story.messages %}
+  <div class="feed-item" style="margin-bottom:.75rem">
+    <header class="feed-head">
+      <span class="src">@{{ msg.source }}</span>
+      <details class="time-pop">
+        <summary class="time-chip">🕐 {{ msg.times.telegram_published_fmt or msg.times.fetched_fmt }}</summary>
+        <div class="time-details">
+          <dl>
+            <dt>انتشار در کانال منبع</dt>
+            <dd>{{ msg.times.telegram_published_fmt }}</dd>
+            <dt>خوانده‌شده در سیستم</dt>
+            <dd>{{ msg.times.fetched_fmt }}</dd>
+            {% if msg.times.has_edit %}
+            <dt>ویرایش در تلگرام</dt>
+            <dd>{{ msg.times.telegram_edited_fmt }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </details>
+      <span class="badge {% if 'merge' in (msg.action or '') %}ok{% elif msg.action == 'new_cluster' %}warn{% endif %}">
+        {{ msg.action_label }}
+      </span>
+      {% if msg.similarity %}
+        <span>sim {{ "%.2f"|format(msg.similarity) }}</span>
+      {% endif %}
+      {% if msg.merged_into %}
+        <span>→ خوشه #{{ msg.merged_into }}</span>
+      {% endif %}
+    </header>
+    <div class="feed-text">{{ (msg.text or '')[:500] }}{% if msg.text and msg.text|length > 500 %}…{% endif %}</div>
+    {% if msg.candidates %}
+    <div class="compare-box">
+      <div class="compare-title">کاندیدهای مقایسه‌شده</div>
+      {% for cand in msg.candidates %}
+      <div class="compare-row {% if cand.similarity and cand.similarity >= 0.72 %}match{% endif %}">
+        {% if cand.cluster_id %}<span>خوشه #{{ cand.cluster_id }}</span>{% endif %}
+        {% if cand.similarity %}<span class="sim">sim {{ "%.2f"|format(cand.similarity) }}</span>{% endif %}
+        {% if cand.sample_source %}<span>@{{ cand.sample_source }}</span>{% endif %}
+        {% if cand.preview %}<div class="preview">{{ cand.preview }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
+
+{% if story.timeline %}
+<div class="section">
+  <h2>خط زمانی پردازش</h2>
+  <div class="timeline">
+    {% for ev in story.timeline %}
+    <div class="timeline-item">
+      <div class="at">{{ ev.at }}</div>
+      <strong>{{ ev.label }}</strong>
+      {% if ev.detail %}<span style="color:var(--muted)"> — {{ ev.detail }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

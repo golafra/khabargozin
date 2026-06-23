@@ -2,20 +2,29 @@
 {% block title %}منابع — خبرگزین{% endblock %}
 {% block content %}
 <h2 style="margin-top:0;color:var(--muted);font-size:1rem">منابع خبری ({{ sources|length }})</h2>
+<p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem">
+  منبع غیرفعال از fetch بعدی نادیده گرفته می‌شود.
+</p>
 <table>
   <tr>
-    <th>منبع</th><th>نوع</th><th>اعتبار</th><th>فعال</th>
-    <th>آخرین fetch</th><th>خطا</th><th>پیام‌ها</th>
+    <th>منبع</th><th>نوع</th><th>اعتبار</th><th>وضعیت</th>
+    <th>آخرین fetch</th><th>خطا</th><th>عملیات</th>
   </tr>
   {% for s in sources %}
   <tr>
     <td><strong>@{{ s.username }}</strong><br><span style="color:var(--muted);font-size:.8rem">{{ s.display_name }}</span></td>
     <td>{{ s.source_type }}</td>
     <td>{{ s.credibility_weight }}</td>
-    <td>{% if s.is_active %}<span class="badge ok">بله</span>{% else %}<span class="badge">خیر</span>{% endif %}</td>
+    <td>
+      {% if s.is_active %}
+        <span class="badge ok">فعال</span>
+      {% else %}
+        <span class="badge warn">غیرفعال</span>
+      {% endif %}
+    </td>
     <td>
       {% if s.last_successful_fetch_at %}
-        {{ s.last_successful_fetch_at.strftime('%m-%d %H:%M') }}
+        {{ s.last_successful_fetch_at.strftime('%Y-%m-%d %H:%M') }}
       {% else %}
         <span class="warn">هرگز</span>
       {% endif %}
@@ -24,7 +33,13 @@
       {% if s.fetch_error_count %}<span class="err">{{ s.fetch_error_count }}</span>{% else %}0{% endif %}
       {% if s.last_error %}<br><span style="font-size:.75rem;color:var(--muted)">{{ s.last_error[:60] }}…</span>{% endif %}
     </td>
-    <td>{{ s.last_message_id or '—' }}</td>
+    <td>
+      <form method="post" action="/sources/{{ s.id }}/toggle" style="margin:0">
+        <button type="submit" class="btn-toggle {% if s.is_active %}on{% else %}off{% endif %}">
+          {% if s.is_active %}غیرفعال کردن{% else %}فعال کردن{% endif %}
+        </button>
+      </form>
+    </td>
   </tr>
   {% endfor %}
 </table>

@@ -12,7 +12,10 @@ def test_published_merge_requires_high_sim():
     message.text = "خبر جدید"
     message.published_at = datetime.now(timezone.utc)
 
-    with patch("app.clustering.merge_published.find_similar_clusters", return_value=[(5, 0.90)]):
+    with patch(
+        "app.clustering.merge_published.find_recent_published_similar",
+        return_value=[(5, 0.90)],
+    ):
         with patch("app.clustering.merge_published.ner_overlap", return_value=0.6):
             cluster = MagicMock()
             cluster.status = "published"
@@ -28,13 +31,19 @@ def test_published_merge_requires_high_sim():
 def test_published_merge_rejects_low_sim():
     session = MagicMock()
     message = MagicMock()
-    message.text = "متفاوت"
+    message.text = "گلزنی رونالدو در دقیقه نود"
     message.published_at = datetime.now(timezone.utc)
 
-    with patch("app.clustering.merge_published.find_similar_clusters", return_value=[(5, 0.70)]):
+    with patch(
+        "app.clustering.merge_published.find_recent_published_similar",
+        return_value=[(5, 0.70)],
+    ):
         cluster = MagicMock()
         cluster.status = "published"
         cluster.window_end = datetime.now(timezone.utc)
+        cluster.event_signature = "abc"
         session.get.return_value = cluster
+        sample = MagicMock(text="شکست تیم ملی والیبال در بازی دوستانه")
+        session.query.return_value.filter_by.return_value.first.return_value = sample
         target = find_published_merge_target(session, message, [0.1] * 384)
     assert target is None

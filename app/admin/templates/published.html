@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}انتشارها — خبرگزین{% endblock %}
+{% block content %}
+<h2 style="margin-top:0;color:var(--muted);font-size:1rem">انتشارهای اخیر ({{ publications|length }})</h2>
+<p style="color:var(--muted);font-size:.85rem;margin-bottom:1.25rem">
+  هر خبر منتشرشده با پیام‌های منبع، مکانیزم ادغام و زمان‌های تلگرام قابل بررسی است.
+</p>
+
+{% if not publications %}
+<p class="feed-hint warn">هنوز انتشاری ثبت نشده.</p>
+{% endif %}
+
+{% for pub in publications %}
+<article class="pub-card">
+  <header class="pub-head">
+    <strong><a href="/clusters/{{ pub.cluster_id }}">خوشه #{{ pub.cluster_id }}</a></strong>
+    <span class="badge ok">منتشر {{ pub.output_published_fmt }}</span>
+    {% if pub.telegram_post_id %}<span>post {{ pub.telegram_post_id }}</span>{% endif %}
+    <span class="badge">{{ pub.track }}</span>
+    <span>{{ pub.independent_sources }} منبع مستقل · {{ pub.message_count }} پیام</span>
+  </header>
+  <div class="pub-body">
+    <p><strong>{{ pub.headline }}</strong></p>
+    {% if pub.summary %}<p style="color:var(--muted)">{{ pub.summary }}</p>{% endif %}
+
+    <div class="mech-box" style="margin-top:.75rem">
+      مکانیزم:
+      پنجره {{ "%.1f"|format(pub.mechanism.merge_window_hours) }}h ·
+      sim ≥ {{ pub.mechanism.merge_sim_threshold }} ·
+      آستانه امتیاز {{ pub.mechanism.score_threshold }}
+    </div>
+
+    <div class="compare-box" style="border:none;padding:0;background:transparent">
+      <div class="compare-title">پیام‌های منبع که به این انتشار رسیدند</div>
+      {% for msg in pub.messages %}
+      <div class="compare-row match">
+        <span class="src">@{{ msg.source }}</span>
+        <details class="time-pop" style="display:inline">
+          <summary class="time-chip">{{ msg.times.telegram_published_fmt or msg.times.fetched_fmt }}</summary>
+          <div class="time-details">
+            <dl>
+              <dt>انتشار تلگرام</dt><dd>{{ msg.times.telegram_published_fmt }}</dd>
+              <dt>خوانده‌شده</dt><dd>{{ msg.times.fetched_fmt }}</dd>
+              {% if msg.times.has_edit %}
+              <dt>ویرایش</dt><dd>{{ msg.times.telegram_edited_fmt }}</dd>
+              {% endif %}
+            </dl>
+          </div>
+        </details>
+        <span class="badge">{{ msg.action_label }}</span>
+        {% if msg.similarity %}<span class="sim">sim {{ "%.2f"|format(msg.similarity) }}</span>{% endif %}
+        <div class="preview">{{ (msg.text or '')[:200] }}{% if msg.text and msg.text|length > 200 %}…{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <p style="margin-top:.75rem">
+      <a href="/clusters/{{ pub.cluster_id }}">جزئیات کامل خوشه و کاندیدهای مقایسه →</a>
+    </p>
+  </div>
+</article>
+{% endfor %}
+{% endblock %}

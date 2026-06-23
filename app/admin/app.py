@@ -1,15 +1,21 @@
-"""Minimal read-only admin panel."""
+"""Operational admin panel."""
 
 import secrets
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
+from app.admin.helpers import action_label_fa, fmt_dt
+from app.admin.live import get_live_snapshot
+from app.admin.operations import (
+    get_cluster_story,
+    list_recent_publications,
+    toggle_source_active,
+)
 from app.admin.stats import (
-    get_cluster_detail,
     get_dashboard,
     list_clusters,
     list_pipeline_traces,
@@ -20,6 +26,8 @@ from app.config import get_settings
 from app.db.session import get_session
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+_TEMPLATES.env.globals["fmt_dt"] = fmt_dt
+_TEMPLATES.env.globals["action_label_fa"] = action_label_fa
 _security = HTTPBasic(auto_error=False)
 
 app = FastAPI(title="Khabargozin Admin", docs_url=None, redoc_url=None)
@@ -52,13 +60,29 @@ def health() -> dict[str, str]:
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    return _TEMPLATES.TemplateResponse(
+        request, "dashboard.html", {"active": "dashboard"}
+    )
+
+
+@app.get("/api/live")
+def api_live(_: None = Depends(_verify)) -> dict:
     session = get_session()
     try:
-        stats = get_dashboard(session)
+        return get_live_snapshot(session)
+    finally:
+        session.close()
+
+
+@app.get("/published", response_class=HTMLResponse)
+def published_list(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    session = get_session()
+    try:
+        rows = list_recent_publications(session, limit=30)
     finally:
         session.close()
     return _TEMPLATES.TemplateResponse(
-        request, "dashboard.html", {"stats": stats, "active": "dashboard"}
+        request, "published.html", {"publications": rows, "active": "published"}
     )
 
 
@@ -73,6 +97,20 @@ def sources(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     return _TEMPLATES.TemplateResponse(
         request, "sources.html", {"sources": rows, "stale_min": stale_min, "active": "sources"}
     )
+
+
+@app.post("/sources/{source_id}/toggle")
+def toggle_source(
+    source_id: int, _: None = Depends(_verify)
+) -> RedirectResponse:
+    session = get_session()
+    try:
+        source = toggle_source_active(session, source_id)
+        if not source:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Source not found")
+    finally:
+        session.close()
+    return RedirectResponse(url="/sources", status_code=303)
 
 
 @app.get("/clusters", response_class=HTMLResponse)
@@ -105,13 +143,13 @@ def cluster_detail(
 ) -> HTMLResponse:
     session = get_session()
     try:
-        detail = get_cluster_detail(session, cluster_id)
+        story = get_cluster_story(session, cluster_id)
     finally:
         session.close()
-    if not detail:
+    if not story:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cluster not found")
     return _TEMPLATES.TemplateResponse(
-        request, "cluster.html", {"detail": detail, "active": "clusters"}
+        request, "cluster.html", {"story": story, "active": "clusters"}
     )
 
 

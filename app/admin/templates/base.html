@@ -69,19 +69,75 @@
     .out-block h4 { margin: 0 0 .5rem; font-size: .85rem; color: var(--muted); }
     .compare { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
     @media (max-width: 700px) { .compare { grid-template-columns: 1fr; } }
+    .live-bar { display:flex; align-items:center; gap:.75rem; margin-bottom:1rem; font-size:.85rem; color:var(--muted); }
+    .live-dot { width:10px; height:10px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+    .live-dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+    .live-dot.loading { background:var(--warn); animation:pulse 1s infinite; }
+    .live-dot.err { background:var(--err); }
+    @keyframes pulse { 50% { opacity:.4; } }
+    .live-meta { margin-right:auto; }
+    .sources-strip { display:flex; flex-wrap:wrap; gap:.5rem; }
+    .src-chip { background:var(--card); border:1px solid var(--border); border-radius:6px;
+                padding:.4rem .65rem; font-size:.78rem; display:flex; gap:.5rem; align-items:center; }
+    .src-chip.ok { border-color:#14532d; }
+    .src-chip.stale { border-color:var(--warn); }
+    .feed-hint { color:var(--muted); font-size:.85rem; margin:0 0 .75rem; }
+    .feed-hint.warn { color:var(--warn); }
+    .feed-item { background:var(--card); border:1px solid var(--border); border-radius:8px;
+                  margin-bottom:.75rem; overflow:hidden; }
+    .feed-item.new { border-right:3px solid var(--accent); }
+    .feed-item.clustered { border-right:3px solid var(--ok); }
+    .feed-item.fresh { border-right:3px solid var(--warn); }
+    .feed-head { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.55rem .85rem;
+                  background:#141c28; font-size:.8rem; }
+    .feed-text { padding:.65rem .85rem; font-size:.9rem; }
+    .compare-box { padding:.5rem .85rem .75rem; border-top:1px solid var(--border); background:#121a24; }
+    .compare-title { font-size:.75rem; color:var(--muted); margin-bottom:.4rem; }
+    .compare-row { font-size:.78rem; padding:.35rem .5rem; margin-bottom:.3rem; border-radius:4px;
+                   background:#1a2332; border:1px solid var(--border); }
+    .compare-row.match { border-color:#14532d; }
+    .compare-row .sim { color:var(--accent); font-weight:600; margin:0 .35rem; }
+    .compare-row .preview { color:var(--muted); margin-top:.2rem; }
+    .ai-out { padding:.5rem .85rem; font-size:.8rem; color:var(--ok); border-top:1px solid var(--border); }
+    main { max-width: 1200px; }
+    .time-chip { cursor:pointer; border:1px solid var(--border); background:#243044; border-radius:4px;
+                 padding:.15rem .45rem; font-size:.75rem; color:var(--text); }
+    .time-chip:hover { border-color:var(--accent); }
+    .time-details { font-size:.75rem; color:var(--muted); padding:.35rem .85rem .5rem;
+                    border-top:1px dashed var(--border); background:#121a24; }
+    .time-details dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:.2rem .75rem; }
+    .time-details dt { color:var(--muted); }
+    .btn-toggle { padding:.25rem .55rem; border-radius:4px; border:1px solid var(--border);
+                  background:#243044; color:var(--text); cursor:pointer; font-size:.78rem; }
+    .btn-toggle.off { border-color:var(--warn); color:var(--warn); }
+    .btn-toggle.on { border-color:var(--ok); color:var(--ok); }
+    .mech-box { background:#121a24; border:1px solid var(--border); border-radius:6px;
+                padding:.65rem .85rem; font-size:.8rem; margin-bottom:.75rem; }
+    .timeline { border-right:2px solid var(--border); margin-right:.5rem; padding-right:1rem; }
+    .timeline-item { margin-bottom:.65rem; font-size:.82rem; }
+    .timeline-item .at { color:var(--muted); font-size:.75rem; }
+    .pub-card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+                margin-bottom:1rem; overflow:hidden; }
+    .pub-head { padding:.75rem 1rem; background:#141c28; display:flex; flex-wrap:wrap;
+                gap:.5rem; align-items:center; }
+    .pub-body { padding:.75rem 1rem; }
+    details.time-pop summary { list-style:none; }
+    details.time-pop summary::-webkit-details-marker { display:none; }
   </style>
 </head>
 <body>
   <header>
-    <h1>خبرگزین — پنل رصد</h1>
+    <h1>خبرگزین — پنل عملیاتی</h1>
     <nav>
-      <a href="/" class="{% if active == 'dashboard' %}active{% endif %}">داشبورد</a>
+      <a href="/" class="{% if active == 'dashboard' %}active{% endif %}">رصد زنده</a>
+      <a href="/published" class="{% if active == 'published' %}active{% endif %}">انتشارها</a>
       <a href="/pipeline" class="{% if active == 'pipeline' %}active{% endif %}">مسیر پردازش</a>
       <a href="/sources" class="{% if active == 'sources' %}active{% endif %}">منابع</a>
       <a href="/clusters" class="{% if active == 'clusters' %}active{% endif %}">خوشه‌ها</a>
     </nav>
   </header>
   <main>{% block content %}{% endblock %}</main>
-  <footer>read-only · refresh برای به‌روزرسانی</footer>
+  <footer>رصد زنده — هر ۸ ثانیه خودکار به‌روز می‌شود</footer>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

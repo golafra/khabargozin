@@ -181,7 +181,9 @@ def _recheck_recent_edits(session: Session, source: Source, fetcher) -> int:
     return updated
 
 
-def _fetch_source(session: Session, source: Source, fetcher) -> dict[str, int]:
+def _fetch_source(
+    session: Session, source: Source, fetcher, *, recheck_edits: bool = False
+) -> dict[str, int]:
     settings = get_settings()
     now = datetime.now(timezone.utc)
     cursor = FetchCursor(
@@ -218,58 +220,122 @@ def _fetch_source(session: Session, source: Source, fetcher) -> dict[str, int]:
 
     if batch.messages:
         source.last_message_id = max_message_id
-        source.last_successful_fetch_at = now
-        source.fetch_error_count = 0
-        source.last_error = None
 
-    stats["edit_rechecked"] = _recheck_recent_edits(session, source, fetcher)
+    source.last_successful_fetch_at = now
+    source.fetch_error_count = 0
+    source.last_error = None
+
+    if recheck_edits:
+        stats["edit_rechecked"] = _recheck_recent_edits(session, source, fetcher)
     session.commit()
     return stats
 
 
-@celery_app.task(name="app.tasks.fetch.fetch_all_sources", acks_late=True)
-def fetch_all_sources() -> dict:
+@celery_app.task(name="app.tasks.fetch.fetch_source", acks_late=True)
+def fetch_source(source_id: int) -> dict:
+    """Fetch one source — parallel per-source tasks avoid blocking the whole pipeline."""
     settings = get_settings()
-    lock_key = "task:fetch_all_sources"
+    lock_key = f"task:fetch_source:{source_id}"
     if not acquire_redis_lock(lock_key, settings.TASK_LOCK_TTL_FETCH_SECONDS):
-        return {"skipped": True, "reason": "task_already_running"}
+        return {"skipped": True, "reason": "source_fetch_running", "source_id": source_id}
 
     from app.db.session import get_session
 
     session = get_session()
     fetcher = get_fetcher()
-    totals = {"inserted": 0, "updated": 0, "edit_rechecked": 0, "flushed_buffer": 0}
     try:
+        source = session.get(Source, source_id)
+        if not source or not source.is_active:
+            return {"skipped": True, "reason": "inactive", "source_id": source_id}
         try:
-            totals["flushed_buffer"] = _flush_redis_buffer(session)
+            stats = _fetch_source(session, source, fetcher)
+            return {"source_id": source_id, "username": source.username, **stats}
+        except Exception as exc:
+            source.fetch_error_count += 1
+            source.last_error = str(exc)[:500]
             session.commit()
-        except SQLAlchemyError:
-            session.rollback()
-
-        sources = session.scalars(select(Source).where(Source.is_active.is_(True))).all()
-        for source in sources:
-            try:
-                stats = _fetch_source(session, source, fetcher)
-                totals["inserted"] += stats["inserted"]
-                totals["updated"] += stats["updated"]
-                totals["edit_rechecked"] += stats.get("edit_rechecked", 0)
-            except Exception as exc:
-                source.fetch_error_count += 1
-                source.last_error = str(exc)[:500]
-                session.commit()
-                write_audit_log(
-                    session,
-                    entity_type="source",
-                    entity_id=source.id,
-                    action="fetch_failed",
-                    actor="fetch_task",
-                    metadata={"error": str(exc)[:200]},
-                )
-            time.sleep(settings.ICA_FETCH_DELAY_SECONDS)
-        return totals
+            write_audit_log(
+                session,
+                entity_type="source",
+                entity_id=source.id,
+                action="fetch_failed",
+                actor="fetch_task",
+                metadata={"error": str(exc)[:200]},
+            )
+            return {"source_id": source_id, "error": str(exc)[:200]}
     finally:
         session.close()
         release_redis_lock(lock_key)
+
+
+@celery_app.task(name="app.tasks.fetch.fetch_all_sources", acks_late=True)
+def fetch_all_sources() -> dict:
+    """Manual / e2e — queue one task per active source."""
+    settings = get_settings()
+    from app.db.session import get_session
+
+    session = get_session()
+    try:
+        try:
+            flushed = _flush_redis_buffer(session)
+            session.commit()
+        except SQLAlchemyError:
+            session.rollback()
+            flushed = 0
+        sources = session.scalars(select(Source).where(Source.is_active.is_(True))).all()
+        delay_step = max(settings.ICA_FETCH_DELAY_SECONDS, settings.ica_min_interval_seconds)
+        for i, source in enumerate(sources):
+            fetch_source.apply_async(
+                args=[source.id],
+                task_id=f"{FETCH_SOURCE_TASK_PREFIX}{source.id}",
+                replace=True,
+                countdown=int(i * delay_step),
+            )
+        return {"queued": len(sources), "flushed_buffer": flushed, "stagger_sec": delay_step}
+    finally:
+        session.close()
+
+
+FETCH_SINGLETON_ID = "khabargozin-singleton-fetch"
+FETCH_SOURCE_TASK_PREFIX = "khabargozin-fetch-src-"
+CLUSTER_SINGLETON_ID = "khabargozin-singleton-cluster"
+
+
+@celery_app.task(name="app.tasks.fetch.dispatch_fetch", acks_late=False)
+def dispatch_fetch() -> dict:
+    """Beat entry — fetch one stale source per tick (ICA rate limits)."""
+    from app.db.session import get_session
+
+    session = get_session()
+    try:
+        try:
+            flushed = _flush_redis_buffer(session)
+            session.commit()
+        except SQLAlchemyError:
+            session.rollback()
+            flushed = 0
+
+        source = session.scalar(
+            select(Source)
+            .where(Source.is_active.is_(True))
+            .order_by(Source.last_successful_fetch_at.asc().nullsfirst())
+            .limit(1)
+        )
+        if not source:
+            return {"queued": 0, "flushed_buffer": flushed}
+
+        fetch_source.apply_async(
+            args=[source.id],
+            task_id=f"{FETCH_SOURCE_TASK_PREFIX}{source.id}",
+            replace=True,
+        )
+        return {
+            "queued": 1,
+            "flushed_buffer": flushed,
+            "source": source.username,
+        }
+    finally:
+        session.close()
 
 
 @celery_app.task(name="app.tasks.fetch.check_source_health", acks_late=True)

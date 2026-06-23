@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.audit import write_audit_log
 from app.clustering.embedder import embed_text
+from app.clustering.text_normalize import normalize_for_clustering
 from app.clustering.merge import (
     attach_message_to_cluster,
     create_cluster_for_message,
-    find_merge_target,
+    search_merge_target,
 )
 from app.clustering.merge_published import find_published_merge_target
 from app.clustering.scorer import score_cluster
@@ -31,27 +32,61 @@ def _process_message(session: Session, message: Message) -> None:
     text = message.text or ""
     mark_slow_op(True)
     try:
-        embedding = embed_text(text)
+        embedding = embed_text(normalize_for_clustering(text) or text)
     finally:
         mark_slow_op(False)
 
     message.embedding = embedding
-    target_id = find_merge_target(session, message, embedding)
-    if target_id:
-        attach_message_to_cluster(session, message.id, target_id)
-        score_cluster(session, target_id)
-        update_hold_confirmation(session, target_id)
+    merge = search_merge_target(session, message, embedding)
+    if merge.target_id:
+        attach_message_to_cluster(session, message.id, merge.target_id)
+        write_audit_log(
+            session,
+            entity_type="message",
+            entity_id=message.id,
+            action="merged_into_cluster",
+            actor="cluster_task",
+            new_status=str(merge.target_id),
+            metadata={
+                "similarity": merge.best_similarity,
+                "match_reason": merge.match_reason,
+                "candidates": merge.candidates[:5],
+            },
+        )
+        score_cluster(session, merge.target_id)
+        update_hold_confirmation(session, merge.target_id)
         return
 
     published_target = find_published_merge_target(session, message, embedding)
     if published_target:
         attach_message_to_cluster(session, message.id, published_target)
+        write_audit_log(
+            session,
+            entity_type="message",
+            entity_id=message.id,
+            action="merged_into_published",
+            actor="cluster_task",
+            new_status=str(published_target),
+            metadata={"candidates": merge.candidates[:5]},
+        )
         process_supplemental(session, published_target, text)
         for cid in detect_retraction_candidates(session, message):
             process_retraction_candidate(session, cid, message)
         return
 
     create_cluster_for_message(session, message, embedding)
+    write_audit_log(
+        session,
+        entity_type="message",
+        entity_id=message.id,
+        action="new_cluster",
+        actor="cluster_task",
+        new_status=str(message.cluster_id),
+        metadata={
+            "compared_candidates": merge.candidates[:5],
+            "best_similarity": merge.candidates[0]["similarity"] if merge.candidates else None,
+        },
+    )
     score_cluster(session, message.cluster_id)
 
 
@@ -114,3 +149,13 @@ def cluster_pending_messages() -> dict:
     finally:
         session.close()
         release_redis_lock(lock_key)
+
+
+CLUSTER_SINGLETON_ID = "khabargozin-singleton-cluster"
+
+
+@celery_app.task(name="app.tasks.cluster.dispatch_cluster", acks_late=False)
+def dispatch_cluster() -> dict:
+    """Beat entry — keep at most one cluster task in the queue."""
+    cluster_pending_messages.apply_async(task_id=CLUSTER_SINGLETON_ID, replace=True)
+    return {"queued": True}

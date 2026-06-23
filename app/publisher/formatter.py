@@ -1,7 +1,6 @@
 """HTML formatter with escape."""
 
 import html
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,6 +8,12 @@ from sqlalchemy.orm import Session
 from app.ai.schemas import AIClusterOutput
 from app.db.models.message import Message
 from app.db.models.source import Source
+
+
+def telegram_post_url(username: str, message_id: int) -> str:
+    """Public t.me link to the exact channel post."""
+    handle = (username or "").strip().lstrip("@")
+    return f"https://t.me/{handle}/{message_id}"
 
 
 def format_publication_html(
@@ -36,6 +41,17 @@ def format_publication_html(
     return "\n".join(parts)
 
 
+def _source_link_label(src: Source) -> str:
+    label = (src.display_name or src.username or "").strip()
+    if not label:
+        return html.escape(src.username or "منبع")
+    if not label.startswith("@"):
+        handle = (src.username or "").lstrip("@")
+        if handle and handle.lower() not in label.lower():
+            return html.escape(f"{label} (@{handle})")
+    return html.escape(label)
+
+
 def _build_attributions(session: Session, cluster_id: int) -> list[str]:
     rows = session.execute(
         select(Message, Source)
@@ -50,12 +66,10 @@ def _build_attributions(session: Session, cluster_id: int) -> list[str]:
         if src.id in seen:
             continue
         seen.add(src.id)
-        name = html.escape(src.display_name or src.username)
+        label = _source_link_label(src)
         if msg.is_deleted:
-            links.append(f"[منبع حذف شد] {name}")
-        elif msg.url:
-            url = html.escape(msg.url, quote=True)
-            links.append(f'<a href="{url}">{name}</a>')
+            links.append(f"[حذف‌شده] {label}")
         else:
-            links.append(name)
+            post_url = telegram_post_url(src.username, int(msg.message_id))
+            links.append(f'<a href="{html.escape(post_url, quote=True)}">{label}</a>')
     return links

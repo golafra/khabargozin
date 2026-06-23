@@ -1,7 +1,7 @@
 """Celery application."""
 
 from celery import Celery
-from celery.signals import worker_process_init
+from celery.signals import worker_process_init, worker_ready
 
 from app.config import get_settings
 
@@ -15,6 +15,7 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     worker_max_tasks_per_child=settings.CELERY_MAX_TASKS_PER_CHILD,
+    task_default_queue="default",
     task_routes={
         "app.tasks.cluster.cluster_pending_messages": {"queue": "ml"},
     },
@@ -24,11 +25,11 @@ celery_app.conf.update(
 def build_schedule_from_settings(s: "Settings") -> dict:
     return {
         "fetch-all": {
-            "task": "app.tasks.fetch.fetch_all_sources",
+            "task": "app.tasks.fetch.dispatch_fetch",
             "schedule": s.BEAT_FETCH_INTERVAL_SECONDS,
         },
         "cluster-pending": {
-            "task": "app.tasks.cluster.cluster_pending_messages",
+            "task": "app.tasks.cluster.dispatch_cluster",
             "schedule": s.BEAT_CLUSTER_INTERVAL_SECONDS,
         },
         "process-ai": {
@@ -75,3 +76,29 @@ def init_ml_model(**kwargs):
         _get_model()
     except Exception:
         pass
+
+
+@worker_ready.connect
+def bootstrap_pipeline(sender, **kwargs):
+    """On worker start: clear orphaned default Celery queue, purge backlog, kick fetch."""
+    try:
+        import redis
+
+        client = redis.from_url(get_settings().REDIS_URL)
+        # Beat enqueues to the built-in "celery" queue; worker listens on "default,ml".
+        if client.llen("celery") > 0:
+            client.delete("celery")
+        if client.llen("default") > 20:
+            sender.control.purge()
+        # Orphan global fetch lock from the old monolithic task blocks all fetches.
+        client.delete("task:fetch_all_sources")
+        for sid in range(1, 64):
+            client.delete(f"task:fetch_source:{sid}")
+    except Exception:
+        pass
+
+    from app.tasks.cluster import dispatch_cluster
+    from app.tasks.fetch import dispatch_fetch
+
+    dispatch_fetch.apply_async(countdown=10)
+    dispatch_cluster.apply_async(countdown=15)

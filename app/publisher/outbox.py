@@ -12,6 +12,7 @@ from app.db.models.cluster import Cluster
 from app.db.models.publication import Publication
 from app.db.models.publication_outbox import PublicationOutbox
 from app.publisher.bot import get_cached_chat_id, resolve_and_cache_chat, send_message_html
+from app.publisher.duplicate_guard import find_publish_duplicate
 from app.publisher.formatter import format_publication_html
 from app.publisher.tracks import route_track
 from app.resilience.locking import outbox_lock
@@ -122,6 +123,31 @@ def process_outbox_item(session: Session, outbox_id: int) -> bool:
             sensitivity=ai_row.sensitivity,
             needs_human_review=ai_row.needs_human_review,
         )
+
+        duplicate = find_publish_duplicate(session, cluster)
+        if duplicate:
+            dup_id, dup_sim, dup_reason = duplicate
+            outbox.status = "cancelled"
+            outbox.error_message = f"duplicate_of_cluster_{dup_id}"
+            cluster.status = "rejected"
+            cluster.status_reason = f"duplicate_publish:{dup_id}"
+            write_audit_log(
+                session,
+                entity_type="cluster",
+                entity_id=cluster.id,
+                action="duplicate_publish_blocked",
+                actor="publish_task",
+                reason=dup_reason,
+                old_status="ai_done",
+                new_status="rejected",
+                metadata={
+                    "duplicate_of": dup_id,
+                    "similarity": round(dup_sim, 3),
+                    "headline": ai_row.headline,
+                },
+            )
+            return False
+
         rendered = format_publication_html(session, cluster.id, ai_result)
         mode = settings.PUBLISH_MODE
         chat_id = get_cached_chat_id(mode)

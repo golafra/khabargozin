@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+import redis
 
 from app.config import get_settings
 from app.db.models.source import Source
@@ -22,27 +23,32 @@ class ICAFetcher(FetcherBackend):
     def __init__(self, client: Optional[httpx.Client] = None) -> None:
         self._client = client or httpx.Client(timeout=30.0)
         self._settings = get_settings()
-        self._last_request_at: float = 0.0
 
     def _throttle(self) -> None:
-        min_interval = self._settings.ica_min_interval_seconds
-        elapsed = time.monotonic() - self._last_request_at
-        if elapsed < min_interval:
-            time.sleep(min_interval - elapsed)
-        self._last_request_at = time.monotonic()
+        """Global Redis gate — one ICA request at a time across all workers."""
+        min_interval = max(self._settings.ica_min_interval_seconds, 10.0)
+        client = redis.from_url(self._settings.REDIS_URL)
+        while not client.set("ica:global_gate", "1", nx=True, ex=int(min_interval)):
+            time.sleep(0.25)
 
-    def _get_page(self, url: str, retries: int = 3) -> dict:
+    def _get_page(self, url: str, retries: int = 5) -> dict:
         last_response = None
         for attempt in range(retries):
             self._throttle()
             last_response = self._client.get(url)
             if last_response.status_code == 429:
-                wait = self._settings.TELEGRAM_FLOODWAIT_DEFAULT_SECONDS
+                wait = max(self._settings.TELEGRAM_FLOODWAIT_DEFAULT_SECONDS, 30.0)
                 match = re.search(r"FLOOD_WAIT_(\d+)", last_response.text)
                 if match:
                     wait = float(match.group(1)) + 1
                 time.sleep(wait)
                 continue
+            last_response.raise_for_status()
+            return last_response.json()
+        if last_response is not None and last_response.status_code == 429:
+            time.sleep(45)
+            self._throttle()
+            last_response = self._client.get(url)
             last_response.raise_for_status()
             return last_response.json()
         if last_response is not None:

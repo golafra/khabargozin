@@ -16,5 +16,7 @@ def test_find_merge_target_high_similarity():
             cluster = MagicMock()
             cluster.status = "scored"
             session.get.return_value = cluster
+            sample = MagicMock(text="زلزله شدید در فارس")
+            session.query.return_value.filter_by.return_value.first.return_value = sample
             target = find_merge_target(session, message, [0.1] * 384)
     assert target == 42
