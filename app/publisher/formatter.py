@@ -42,14 +42,12 @@ def format_publication_html(
 
 
 def _source_link_label(src: Source) -> str:
-    label = (src.display_name or src.username or "").strip()
-    if not label:
-        return html.escape(src.username or "منبع")
-    if not label.startswith("@"):
-        handle = (src.username or "").lstrip("@")
-        if handle and handle.lower() not in label.lower():
-            return html.escape(f"{label} (@{handle})")
-    return html.escape(label)
+    """Persian channel name only — no @username or numeric ids in visible text."""
+    label = (src.display_name or "").strip()
+    if label:
+        return html.escape(label)
+    handle = (src.username or "").strip().lstrip("@")
+    return html.escape(handle or "منبع")
 
 
 def _build_attributions(session: Session, cluster_id: int) -> list[str]:

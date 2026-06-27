@@ -17,6 +17,15 @@ def _get_model():
     return SentenceTransformer(MODEL_NAME)
 
 
+def embedding_to_list(embedding) -> list[float] | None:
+    """Normalize pgvector/numpy embeddings for Python APIs that expect list[float]."""
+    if embedding is None:
+        return None
+    if hasattr(embedding, "tolist"):
+        return embedding.tolist()
+    return list(embedding)
+
+
 def embed_text(text: str) -> list[float]:
     if not text or not text.strip():
         dim = 384

@@ -26,7 +26,8 @@ def test_build_attributions_links_to_exact_post():
     links = _build_attributions(session, cluster_id=10)
     assert len(links) == 1
     assert 'href="https://t.me/Tasnimnews/555"' in links[0]
-    assert "تسنیم" in links[0]
+    assert links[0].endswith(">تسنیم</a>")
+    assert "(@" not in links[0]
 
 
 def test_dedupe_headline_from_summary():

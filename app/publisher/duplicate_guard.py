@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clustering.embedder import embedding_to_list
 from app.clustering.topic_overlap import should_block_duplicate_publish
 from app.clustering.vector_search import find_recent_published_similar
 from app.db.models.ai_result import AIResult
@@ -15,7 +16,8 @@ def find_publish_duplicate(
     cluster: Cluster,
 ) -> tuple[int, float, str] | None:
     """Return (existing_cluster_id, similarity, reason) if publish should be blocked."""
-    if not cluster.centroid_embedding:
+    query_embedding = embedding_to_list(cluster.centroid_embedding)
+    if query_embedding is None:
         return None
 
     ai_row = session.scalar(
@@ -40,7 +42,7 @@ def find_publish_duplicate(
 
     candidates = find_recent_published_similar(
         session,
-        list(cluster.centroid_embedding),
+        query_embedding,
         limit=6,
     )
 

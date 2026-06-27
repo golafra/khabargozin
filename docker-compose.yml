@@ -49,7 +49,12 @@ services:
       DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
       REDIS_URL: redis://redis:6379/0
     depends_on:
-      - worker
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
     volumes:
       - .:/app
     restart: unless-stopped
