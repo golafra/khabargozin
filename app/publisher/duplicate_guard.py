@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clustering.anchor_selector import get_anchor_message
 from app.clustering.embedder import embedding_to_list
 from app.clustering.topic_overlap import should_block_duplicate_publish
 from app.clustering.vector_search import find_recent_published_similar
@@ -29,12 +30,7 @@ def find_publish_duplicate(
     headline = ai_row.headline if ai_row else ""
     summary = ai_row.summary if ai_row else ""
 
-    sample_msg = session.scalar(
-        select(Message)
-        .where(Message.cluster_id == cluster.id)
-        .order_by(Message.published_at.asc())
-        .limit(1)
-    )
+    sample_msg = get_anchor_message(session, cluster.id)
     source_text = sample_msg.text if sample_msg else ""
     cluster_text = " ".join(p for p in (headline, summary, source_text) if p).strip()
     if not cluster_text:

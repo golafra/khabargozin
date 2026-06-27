@@ -14,6 +14,7 @@ def test_republisher_not_independent():
             self.source_id = source_id
             self.is_deleted = False
             self.is_primary_source = is_primary
+            self.raw_payload = {}
 
     class FakeSrc:
         def __init__(self, id, is_primary):

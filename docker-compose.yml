@@ -25,20 +25,36 @@ services:
       timeout: 3s
       retries: 5
 
+  migrate:
+    build: .
+    command: alembic upgrade head
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   worker:
     build: .
-    command: celery -A app.tasks.celery_app worker -Q default,ml,celery --loglevel=info --concurrency=2
+    command: celery -A app.tasks.celery_app worker -Q default,ml,celery --loglevel=info --concurrency=1
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg2://khabargozin:khabargozin@postgres:5432/khabargozin
       REDIS_URL: redis://redis:6379/0
+    mem_limit: 12g
+    gpus: all
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - .:/app
+      - hf_cache:/root/.cache/huggingface
     restart: unless-stopped
 
   beat:
@@ -53,6 +69,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       worker:
         condition: service_started
     volumes:
@@ -85,6 +103,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       worker:
         condition: service_started
     volumes:
@@ -93,3 +113,4 @@ services:
 
 volumes:
   pgdata:
+  hf_cache:

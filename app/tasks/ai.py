@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.ai.client import AIClient, circuit_breaker_open
 from app.ai.guardrails import check_guardrails
@@ -12,7 +12,7 @@ from app.db.models.ai_result import AIResult
 from app.db.models.cluster import Cluster
 from app.db.models.message import Message
 from app.db.models.source import Source
-from app.publisher.hold import enqueue_hold, needs_ai_rerun, should_hold
+from app.publisher.hold import enqueue_hold, needs_ai_rerun, should_hold_for_cluster
 from app.publisher.routing import apply_publish_routing
 from app.publisher.tracks import is_in_hold_queue
 from app.resilience.task_lock import acquire_redis_lock, release_redis_lock
@@ -83,15 +83,34 @@ def process_cloud_ai() -> dict:
                 continue
 
             ok, guard_reason = check_guardrails(result, cluster.independent_source_count)
+
+            prev_version = session.scalar(
+                select(func.max(AIResult.version)).where(AIResult.cluster_id == cluster.id)
+            )
+            next_version = (prev_version or 0) + 1
+            prev_row = session.scalar(
+                select(AIResult)
+                .where(AIResult.cluster_id == cluster.id)
+                .order_by(AIResult.created_at.desc())
+                .limit(1)
+            )
+
+            needs_review = should_hold_for_cluster(session, cluster, result)
+            if needs_review:
+                result = result.model_copy(update={"needs_human_review": True})
+
             ai_row = AIResult(
                 cluster_id=cluster.id,
                 schema_version=settings.AI_SCHEMA_VERSION,
                 prompt_version=settings.PROMPT_VERSION,
+                version=next_version,
+                supersedes_id=prev_row.id if prev_row else None,
                 status=result.status,
                 editorial_priority=result.editorial_priority,
                 confidence=result.confidence,
                 headline=result.headline,
                 summary=result.summary,
+                body=getattr(result, "body", "") or "",
                 why_it_matters=result.why_it_matters,
                 conflicts=result.conflicts,
                 sources_used=result.sources_used,
@@ -109,12 +128,7 @@ def process_cloud_ai() -> dict:
             cluster.ai_independent_source_count_at_run = cluster.independent_source_count
             cluster.sensitivity = result.sensitivity
 
-            if should_hold(
-                result.editorial_priority,
-                cluster.independent_source_count,
-                result.confidence,
-                bool(result.conflicts),
-            ):
+            if needs_review:
                 enqueue_hold(session, cluster.id, cluster.independent_source_count)
                 cluster.status = "hold"
             else:

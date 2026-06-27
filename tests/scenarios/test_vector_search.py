@@ -10,6 +10,6 @@ def test_vector_search_returns_similarity():
     row = MagicMock()
     session.execute.return_value.fetchall.return_value = [(10, 0.88)]
 
-    results = find_similar_clusters(session, [0.1] * 384, limit=5)
+    results = find_similar_clusters(session, [0.1] * 1024, limit=5)
     assert results == [(10, 0.88)]
-    session.execute.assert_called_once()
+    assert session.execute.call_count == 2

@@ -128,4 +128,47 @@
   </div>
 </div>
 {% endif %}
+
+<div class="section">
+  <h2>بازبینی انسانی</h2>
+  <form id="review-form" class="card" style="padding:1rem">
+    <label>اقدام</label>
+    <select name="action" id="review-action">
+      <option value="confirm_merge">تأیید merge</option>
+      <option value="reject_publish">رد انتشار</option>
+      <option value="split">جداسازی</option>
+    </select>
+    <label style="margin-top:.75rem;display:block">دلیل رد (اجباری برای رد/جداسازی)</label>
+    <select name="reject_reason" id="review-reason">
+      <option value="">— انتخاب کنید —</option>
+      <option value="topic_mismatch">موضوع متفاوت</option>
+      <option value="location_mismatch">مکان متفاوت</option>
+      <option value="time_mismatch">زمان متفاوت</option>
+      <option value="duplicate">تکراری</option>
+      <option value="low_quality">کیفیت پایین</option>
+      <option value="other">سایر</option>
+    </select>
+    <label style="margin-top:.75rem;display:block">یادداشت</label>
+    <input type="text" name="reject_note" id="review-note" style="width:100%;max-width:32rem" />
+    <button type="submit" style="margin-top:1rem">ثبت بازخورد</button>
+    <p id="review-status" style="color:var(--muted);margin-top:.5rem"></p>
+  </form>
+</div>
+<script>
+document.getElementById('review-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const action = document.getElementById('review-action').value;
+  const reject_reason = document.getElementById('review-reason').value || null;
+  const reject_note = document.getElementById('review-note').value || '';
+  const res = await fetch('/api/clusters/{{ c.id }}/review', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action, reject_reason, reject_note}),
+  });
+  const data = await res.json().catch(() => ({}));
+  document.getElementById('review-status').textContent = res.ok
+    ? 'ثبت شد (#' + data.feedback_id + ')'
+    : (data.detail || 'خطا');
+});
+</script>
 {% endblock %}

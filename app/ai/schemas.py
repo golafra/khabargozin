@@ -11,6 +11,7 @@ class AIClusterOutput(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     headline: str = ""
     summary: str = ""
+    body: str = ""
     why_it_matters: str = ""
     conflicts: list[Any] = Field(default_factory=list)
     sources_used: list[Any] = Field(default_factory=list)
@@ -20,11 +21,11 @@ class AIClusterOutput(BaseModel):
     ] = "normal"
     needs_human_review: bool = False
 
-    @field_validator("headline", "summary")
+    @field_validator("headline", "summary", "body")
     @classmethod
     def strip_html_tags(cls, v: str) -> str:
         if "<" in v or ">" in v:
-            raise ValueError("HTML not allowed in headline/summary")
+            raise ValueError("HTML not allowed in headline/summary/body")
         return v.strip()
 
 

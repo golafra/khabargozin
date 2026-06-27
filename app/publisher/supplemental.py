@@ -19,7 +19,12 @@ from app.resilience.locking import publication_lock
 
 
 def process_supplemental(session: Session, cluster_id: int, new_text: str) -> bool:
+    from app.clustering.conflict_detector import detect_critical_numeric_changes
+    from app.db.models.cluster import Cluster
+    from app.db.models.message import Message
+
     settings = get_settings()
+    cluster = session.get(Cluster, cluster_id)
     pub = session.scalars(
         select(Publication).where(Publication.cluster_id == cluster_id).order_by(Publication.published_at.desc())
     ).first()
@@ -30,6 +35,28 @@ def process_supplemental(session: Session, cluster_id: int, new_text: str) -> bo
         select(AIResult).where(AIResult.cluster_id == cluster_id).order_by(AIResult.created_at.desc())
     ).first()
     if not ai_row:
+        return False
+
+    old_texts = [
+        m.text or ""
+        for m in session.scalars(
+            select(Message).where(Message.cluster_id == cluster_id)
+        ).all()
+    ]
+    numeric_deltas = detect_critical_numeric_changes(old_texts, new_text)
+    if numeric_deltas and cluster:
+        cluster.story_phase = "developing"
+        cluster.locked_for_hold = True
+        cluster.status = "hold"
+        write_audit_log(
+            session,
+            entity_type="cluster",
+            entity_id=cluster_id,
+            action="numeric_delta_hold",
+            actor="supplemental",
+            reason="critical_numeric_changes",
+            metadata={"deltas": [d.__dict__ for d in numeric_deltas]},
+        )
         return False
 
     published_text = f"{ai_row.headline}\n{ai_row.summary}"
@@ -57,6 +84,7 @@ def process_supplemental(session: Session, cluster_id: int, new_text: str) -> bo
             confidence=ai_row.confidence,
             headline=ai_row.headline,
             summary=ai_row.summary,
+            body=ai_row.body or "",
             why_it_matters=ai_row.why_it_matters,
             conflicts=ai_row.conflicts or [],
             sources_used=ai_row.sources_used or [],

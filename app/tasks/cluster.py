@@ -6,14 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit import write_audit_log
-from app.clustering.embedder import embed_text
-from app.clustering.text_normalize import normalize_for_clustering
+from app.clustering.confidence import update_cluster_confidence_metrics
 from app.clustering.merge import (
     attach_message_to_cluster,
     create_cluster_for_message,
     search_merge_target,
 )
 from app.clustering.merge_published import find_published_merge_target
+from app.clustering.pipeline import extract_message_features
 from app.clustering.scorer import score_cluster
 from app.clustering.threshold import effective_threshold, should_skip_clustering
 from app.config import get_settings
@@ -29,15 +29,13 @@ from app.tasks.celery_app import celery_app
 
 
 def _process_message(session: Session, message: Message) -> None:
-    text = message.text or ""
     mark_slow_op(True)
     try:
-        embedding = embed_text(normalize_for_clustering(text) or text)
+        features, embedding = extract_message_features(session, message)
     finally:
         mark_slow_op(False)
 
-    message.embedding = embedding
-    merge = search_merge_target(session, message, embedding)
+    merge = search_merge_target(session, message, embedding, features=features)
     if merge.target_id:
         attach_message_to_cluster(session, message.id, merge.target_id)
         write_audit_log(
@@ -49,7 +47,17 @@ def _process_message(session: Session, message: Message) -> None:
             new_status=str(merge.target_id),
             metadata={
                 "similarity": merge.best_similarity,
+                "rerank": merge.best_rerank,
                 "match_reason": merge.match_reason,
+                "candidates": merge.candidates[:5],
+            },
+        )
+        update_cluster_confidence_metrics(
+            session,
+            merge.target_id,
+            debug={
+                "avg_hybrid": merge.best_similarity or 0.7,
+                "avg_rerank": merge.best_rerank or 0.7,
                 "candidates": merge.candidates[:5],
             },
         )
@@ -69,12 +77,12 @@ def _process_message(session: Session, message: Message) -> None:
             new_status=str(published_target),
             metadata={"candidates": merge.candidates[:5]},
         )
-        process_supplemental(session, published_target, text)
+        process_supplemental(session, published_target, message.text or "")
         for cid in detect_retraction_candidates(session, message):
             process_retraction_candidate(session, cid, message)
         return
 
-    create_cluster_for_message(session, message, embedding)
+    create_cluster_for_message(session, message, embedding, features=features)
     write_audit_log(
         session,
         entity_type="message",
@@ -84,7 +92,7 @@ def _process_message(session: Session, message: Message) -> None:
         new_status=str(message.cluster_id),
         metadata={
             "compared_candidates": merge.candidates[:5],
-            "best_similarity": merge.candidates[0]["similarity"] if merge.candidates else None,
+            "best_similarity": merge.candidates[0].get("hybrid_score") if merge.candidates else None,
         },
     )
     score_cluster(session, message.cluster_id)

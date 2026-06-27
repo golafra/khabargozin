@@ -15,6 +15,7 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     worker_max_tasks_per_child=settings.CELERY_MAX_TASKS_PER_CHILD,
+    worker_proc_alive_timeout=600,
     task_default_queue="default",
     task_routes={
         "app.tasks.cluster.cluster_pending_messages": {"queue": "ml"},
@@ -48,6 +49,10 @@ def build_schedule_from_settings(s: "Settings") -> dict:
             "task": "app.tasks.publish.check_hold_confirmations",
             "schedule": s.BEAT_HOLD_CHECK_INTERVAL_SECONDS,
         },
+        "reconcile-clusters": {
+            "task": "app.tasks.reconcile.reconcile_clusters",
+            "schedule": 86400,
+        },
         "archive-weekly": {
             "task": "app.tasks.archive.archive_old_records",
             "schedule": 604800,
@@ -63,6 +68,7 @@ import app.tasks.archive  # noqa: F401
 import app.tasks.cluster  # noqa: F401
 import app.tasks.fetch  # noqa: F401
 import app.tasks.publish  # noqa: F401
+import app.tasks.reconcile  # noqa: F401
 
 # Celery CLI (-A app.tasks.celery_app) expects an `app` attribute.
 app = celery_app

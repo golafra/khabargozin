@@ -28,6 +28,8 @@ def find_similar_clusters(
         )
 
     vec_literal = "[" + ",".join(str(v) for v in query_embedding) + "]"
+    ef_search = settings.PGVECTOR_EF_SEARCH
+    session.execute(text(f"SET LOCAL hnsw.ef_search = {int(ef_search)}"))
     sql = text("""
         SELECT id, 1 - (centroid_embedding <=> CAST(:vec AS vector)) AS sim
         FROM clusters

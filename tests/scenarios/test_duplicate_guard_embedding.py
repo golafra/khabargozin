@@ -11,10 +11,11 @@ def test_find_publish_duplicate_handles_numpy_centroid():
     session.scalar.return_value = None
     cluster = MagicMock()
     cluster.id = 10
-    cluster.centroid_embedding = np.zeros(384, dtype=np.float32)
+    cluster.centroid_embedding = np.zeros(1024, dtype=np.float32)
 
     with patch(
         "app.publisher.duplicate_guard.find_recent_published_similar",
         return_value=[],
     ):
-        assert find_publish_duplicate(session, cluster) is None
+        with patch("app.publisher.duplicate_guard.get_anchor_message", return_value=None):
+            assert find_publish_duplicate(session, cluster) is None

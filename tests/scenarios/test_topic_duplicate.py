@@ -53,5 +53,5 @@ def test_merge_published_rejects_unrelated_low_sim():
         session.get.return_value = cluster
         sample = MagicMock(text="شکست تیم ملی والیبال در بازی دوستانه")
         session.query.return_value.filter_by.return_value.first.return_value = sample
-        target = find_published_merge_target(session, message, [0.1] * 384)
+        target = find_published_merge_target(session, message, [0.1] * 1024)
     assert target is None

@@ -4,6 +4,7 @@ import secrets
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
@@ -15,6 +16,7 @@ from app.admin.operations import (
     list_recent_publications,
     toggle_source_active,
 )
+from app.admin.review import ReviewValidationError, submit_review
 from app.admin.stats import (
     get_dashboard,
     list_clusters,
@@ -137,6 +139,14 @@ def clusters(
     )
 
 
+class ReviewPayload(BaseModel):
+    action: str = "reject_publish"
+    reviewer: str = "admin"
+    reject_reason: str | None = None
+    reject_note: str = ""
+    metadata: dict | None = None
+
+
 @app.get("/clusters/{cluster_id}", response_class=HTMLResponse)
 def cluster_detail(
     request: Request, cluster_id: int, _: None = Depends(_verify)
@@ -151,6 +161,31 @@ def cluster_detail(
     return _TEMPLATES.TemplateResponse(
         request, "cluster.html", {"story": story, "active": "clusters"}
     )
+
+
+@app.post("/api/clusters/{cluster_id}/review")
+def api_cluster_review(
+    cluster_id: int,
+    payload: ReviewPayload,
+    _: None = Depends(_verify),
+) -> dict:
+    session = get_session()
+    try:
+        try:
+            row = submit_review(
+                session,
+                cluster_id,
+                action=payload.action,
+                reviewer=payload.reviewer,
+                reject_reason=payload.reject_reason,
+                reject_note=payload.reject_note,
+                metadata=payload.metadata,
+            )
+        except ReviewValidationError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        return {"ok": True, "feedback_id": row.id}
+    finally:
+        session.close()
 
 
 @app.get("/pipeline", response_class=HTMLResponse)

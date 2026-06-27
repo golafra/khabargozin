@@ -36,10 +36,11 @@ def normalize_cluster_data(data: dict[str, Any]) -> dict[str, Any]:
     if not normalized.get("summary"):
         normalized["summary"] = (
             normalized.pop("content", None)
-            or normalized.pop("body", None)
             or normalized.pop("summary_fa", None)
             or ""
         )
+    if not normalized.get("body"):
+        normalized["body"] = normalized.pop("full_text", None) or ""
     if not normalized.get("why_it_matters"):
         normalized["why_it_matters"] = normalized.pop("why_it_matters", "") or ""
 

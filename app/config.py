@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     OPENAI_MAX_TOKENS: int = 800
     OPENAI_MONTHLY_BUDGET_USD: float = 15.0
     AI_JSON_MAX_RETRIES: int = 2
-    PROMPT_VERSION: str = "v2"
+    PROMPT_VERSION: str = "v3"
     AI_SCHEMA_VERSION: str = "v1"
     FAST_MIN_CONFIDENCE: float = 0.75
     BATCH_MIN_CONFIDENCE: float = 0.60
@@ -121,6 +121,32 @@ class Settings(BaseSettings):
     # Clustering
     CLUSTER_BATCH_SIZE: int = 100
 
+    # Hybrid clustering v4
+    EMBEDDING_MODEL: str = "BAAI/bge-m3"
+    EMBEDDING_DIM: int = 1024
+    RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    RERANKER_PROVIDER: Literal["sentence_transformers", "offline"] = "sentence_transformers"
+    RERANK_TOP_K: int = 3
+    RERANK_MERGE_THRESHOLD: float = 0.75
+    FINGERPRINT_PENALTY_WEIGHT: float = 0.25
+    TOPIC_HARD_BLOCK_CONFIDENCE: float = 0.85
+    TOPIC_SOFT_PENALTY_MISMATCH: float = 0.5
+    MERGE_THRESHOLD_BREAKING: float = 0.78
+    MERGE_THRESHOLD_ECONOMIC: float = 0.82
+    MERGE_THRESHOLD_GENERAL: float = 0.80
+    ANN_TOP_K_BREAKING: int = 20
+    ANN_TOP_K_DEFAULT: int = 10
+    ANN_TOP_K_MIN: int = 8
+    PGVECTOR_EF_SEARCH: int = 40
+    CLUSTER_STABILITY_WINDOW_HOURS: int = 6
+    CONFIDENCE_AUTO_PUBLISH_MIN: int = 70
+    STABILITY_AUTO_PUBLISH_MIN: int = 50
+    BREAKING_PUBLISH_MIN_CONFIDENCE: int = 80
+    BREAKING_VELOCITY_THRESHOLD: int = 5
+    STABILITY_WEIGHT_BREAKING: float = 0.05
+    CLUSTERING_OFFLINE: bool = False
+    BEAT_RECONCILE_HOUR_UTC: int = 3
+
     # Fetch edit tracking
     FETCH_EDIT_LOOKBACK_HOURS: int = 48
     FETCH_EDIT_RECHECK_LIMIT: int = 30
@@ -145,11 +171,10 @@ class Settings(BaseSettings):
     CELERY_MAX_TASKS_PER_CHILD: int = 100
 
     # Audit
-    DECISION_VERSION: str = "merge_v1"
+    DECISION_VERSION: str = "merge_v2"
 
     # App
     APP_START_TIME: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    EMBEDDING_DIM: int = 384
 
     # Admin panel
     ADMIN_PASSWORD: str = ""

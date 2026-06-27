@@ -8,8 +8,8 @@ from tests.integration.conftest import requires_db
 
 pytestmark = requires_db
 
-EMBED_A = [1.0, 0.0, 0.0] + [0.0] * 381
-EMBED_B = [0.99, 0.01, 0.0] + [0.0] * 381
+EMBED_A = [1.0, 0.0, 0.0] + [0.0] * 1021
+EMBED_B = [0.99, 0.01, 0.0] + [0.0] * 1021
 
 
 def _make_source(db_session, username: str = "IntTestSource"):

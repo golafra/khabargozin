@@ -23,7 +23,7 @@ def test_dry_run_outbox_status():
         sensitivity="normal",
     )
 
-    with patch("app.config.get_settings", return_value=settings):
+    with patch("app.publisher.outbox.get_settings", return_value=settings):
         from app.publisher.outbox import enqueue_initial
         outbox = enqueue_initial(session, cluster, result, "<b>test</b>", "batch")
 

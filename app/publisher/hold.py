@@ -31,6 +31,38 @@ def should_hold(
     )
 
 
+def should_hold_for_cluster(
+    session: Session,
+    cluster: Cluster,
+    result: AIClusterOutput,
+) -> bool:
+    """Extended human-review gates including cluster confidence and conflicts."""
+    if should_hold(
+        result.editorial_priority,
+        cluster.independent_source_count,
+        result.confidence,
+        bool(result.conflicts),
+    ):
+        return True
+
+    if result.needs_human_review:
+        return True
+
+    conf = cluster.cluster_confidence or 0
+    stab = cluster.cluster_stability or 100
+    if conf < 65:
+        return True
+    if stab < 40 and cluster.story_phase != "breaking":
+        return True
+
+    from app.clustering.conflict_detector import detect_source_conflict
+
+    if detect_source_conflict(session, cluster.id):
+        return True
+
+    return False
+
+
 def enqueue_hold(session: Session, cluster_id: int, independent_source_count: int) -> HoldQueue:
     settings = get_settings()
     existing = session.scalar(select(HoldQueue).where(HoldQueue.cluster_id == cluster_id))

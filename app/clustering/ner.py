@@ -1,18 +1,38 @@
-"""Optional NER boost — Hazm when available."""
+"""Typed NER — Hazm when available."""
 
-from typing import Set
+from __future__ import annotations
+
+from typing import Dict, List
+
+_HAZM_TAG_MAP = {
+    "PERSON": "PERSON",
+    "PER": "PERSON",
+    "LOCATION": "LOCATION",
+    "LOC": "LOCATION",
+    "ORGANIZATION": "ORGANIZATION",
+    "ORG": "ORGANIZATION",
+    "GPE": "LOCATION",
+    "FAC": "LOCATION",
+}
 
 
-def extract_entities(text: str) -> Set[str]:
+def extract_entities_typed(text: str) -> Dict[str, List[str]]:
     try:
         from hazm import NerTagger, word_tokenize
 
         tagger = _get_tagger()
         tokens = word_tokenize(text)
         tags = tagger.tag(tokens)
-        return {t[0] for t in tags if len(t) > 1 and t[1] != "O"}
+        result: Dict[str, List[str]] = {"PERSON": [], "LOCATION": [], "ORGANIZATION": []}
+        for token, tag in tags:
+            if len(token) <= 1 or tag == "O":
+                continue
+            bucket = _HAZM_TAG_MAP.get(tag)
+            if bucket and token not in result[bucket]:
+                result[bucket].append(token)
+        return result
     except Exception:
-        return set()
+        return {"PERSON": [], "LOCATION": [], "ORGANIZATION": []}
 
 
 _tagger_instance = None
@@ -25,6 +45,14 @@ def _get_tagger():
 
         _tagger_instance = NerTagger(model="resources/ner/peyma-ner")
     return _tagger_instance
+
+
+def extract_entities(text: str) -> set[str]:
+    typed = extract_entities_typed(text)
+    out: set[str] = set()
+    for values in typed.values():
+        out.update(values)
+    return out
 
 
 def ner_overlap(text_a: str, text_b: str) -> float:
